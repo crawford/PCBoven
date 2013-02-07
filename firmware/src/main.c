@@ -6,7 +6,7 @@
 #include "descriptors.h"
 #include "max31855.h"
 
-#define TEMP_READ_RATE 2
+#define TEMP_READ_RATE 1
 
 void platform_init();
 
@@ -24,7 +24,7 @@ int main()
 	g_take_readings = false;
 	sei();
 
-	while (1) {
+	while (true) {
 		Endpoint_SelectEndpoint(OUT_EPNUM);
 		if (Endpoint_IsOUTReceived()) {
 			Endpoint_ClearOUT();
