@@ -18,13 +18,17 @@ CFLAGS += -funsigned-char
 CFLAGS += -fpack-struct
 CFLAGS += -fshort-enums
 CFLAGS += -ffunction-sections
-CFLAGS += -Wl,--gc-sections
+CFLAGS += -fdata-sections
 CFLAGS += -Wall
 CFLAGS += -std=c99
 CFLAGS += -Os
 CFLAGS += -I. -I$(LUFA_PATH)
 CFLAGS += -DF_USB=$(F_USB)UL
 CFLAGS += $(LUFA_OPTS)
+
+LDFLAGS  = -Wl,-gc-sections
+LDFLAGS += -ffreestanding
+LDFLAGS += -dead_strip
 
 LUFA_OPTS  = -D USB_DEVICE_ONLY
 LUFA_OPTS += -D DEVICE_STATE_AS_GPIOR=0
@@ -33,6 +37,8 @@ LUFA_OPTS += -D FIXED_CONTROL_ENDPOINT_SIZE=8
 LUFA_OPTS += -D FIXED_NUM_CONFIGURATIONS=1
 LUFA_OPTS += -D USE_FLASH_DESCRIPTORS
 LUFA_OPTS += -D USE_STATIC_OPTIONS="(USB_DEVICE_OPT_FULLSPEED | USB_OPT_REG_ENABLED | USB_OPT_AUTO_PLL)"
+LUFA_OPTS += -D BOARD=$(BOARD)
+LUFA_OPTS += -D ARCH=$(ARCH)
 
 LUFA_PATH = lufa-lib/trunk
 include $(LUFA_PATH)/LUFA/makefile
