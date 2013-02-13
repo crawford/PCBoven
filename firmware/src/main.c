@@ -16,10 +16,10 @@ int main()
 {
 	struct max31855_result reading;
 
-	LEDs_Init();
 	platform_init();
 	max31855_init();
 	USB_Init();
+	LEDs_Init();
 
 	g_take_readings = false;
 	sei();
@@ -31,19 +31,18 @@ int main()
 		}
 		if (g_take_readings) {
 			g_take_readings = false;
-			LEDs_ToggleLEDs(LEDS_ALL_LEDS);
 
 			Endpoint_SelectEndpoint(IN_EPNUM);
 
 			if (max31855_read(&reading)) {
-				Endpoint_Write_32_LE('X');
+				LEDs_ToggleLEDs(LEDS_ALL_LEDS);
 			}
 
-			Endpoint_Write_8('A');
-			Endpoint_Write_8('l');
-			Endpoint_Write_8('e');
-			Endpoint_Write_8('x');
-			Endpoint_Write_8(0);
+			Endpoint_Write_16_LE(reading.probe_temp);
+			Endpoint_Write_16_LE(reading.internal_temp);
+			Endpoint_Write_8(reading.short_vcc);
+			Endpoint_Write_8(reading.short_gnd);
+			Endpoint_Write_8(reading.open_circuit);
 
 			Endpoint_ClearIN();
 		}
@@ -70,8 +69,6 @@ void platform_init()
 	          1 << COM1A1 |  // Clear on compare match
 	          0x05);         // Set the pre-scaler to 1024
 	TIMSK1 = (1 << OCIE1A);  // Enable interrupt at set point
-
-	LEDs_ToggleLEDs(LEDS_ALL_LEDS);
 }
 
 ISR(TIMER1_COMPA_vect, ISR_BLOCK) {

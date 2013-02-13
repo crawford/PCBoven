@@ -4,11 +4,11 @@
 #define MAX_31855_FAULT 1
 
 struct max31855_result {
-	long probe_temp:14;
-	long internal_temp:12;
-	char short_vcc:1;
-	char short_gnd:1;
-	char open_circuit:1;
+	uint16_t probe_temp;
+	uint16_t internal_temp;
+	uint8_t short_vcc;
+	uint8_t short_gnd;
+	uint8_t open_circuit;
 };
 
 void max31855_init();

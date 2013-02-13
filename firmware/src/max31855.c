@@ -8,7 +8,7 @@
 #define CLK_PORT   PORTF
 #define CLK_PIN    (1 << 5)
 #define DATA_PORT  PINF
-#define DATA_PIN   (1 << 2)
+#define DATA_PIN   (1 << 1)
 
 #define PROBE_TEMP_MASK        0xFFFC0000
 #define PROBE_TEMP_OFFSET      18
@@ -21,13 +21,13 @@
 #define SHORT_GND_MASK         0x00000002
 #define SHORT_GND_OFFSET       1
 #define OPEN_CIRCUIT_MASK      0x00000001
-#define OPNE_CIRCUIT_OFFSET    0
+#define OPEN_CIRCUIT_OFFSET    0
 
 static inline uint32_t spi_read_long();
 
 void max31855_init()
 {
-	DDRF = DATA_PIN;
+	DDRF = ~DATA_PIN;
 	PORTF = 0x00;
 }
 
@@ -35,15 +35,14 @@ int max31855_read(struct max31855_result *result)
 {
 	uint32_t data = spi_read_long();
 
+	result->probe_temp    = (data & PROBE_TEMP_MASK)    >> PROBE_TEMP_OFFSET;
+	result->internal_temp = (data & INTERNAL_TEMP_MASK) >> INTERNAL_TEMP_OFFSET;
+	result->short_vcc     = (data & SHORT_VCC_MASK)     >> SHORT_VCC_OFFSET;
+	result->short_gnd     = (data & SHORT_GND_MASK)     >> SHORT_GND_OFFSET;
+	result->open_circuit  = (data & OPEN_CIRCUIT_MASK)  >> OPEN_CIRCUIT_OFFSET;
+
 	if (data & FAULT_MASK)
 		return MAX_31855_FAULT;
-
-	result->probe_temp    = (data & PROBE_TEMP_MASK)    << PROBE_TEMP_OFFSET;
-	result->internal_temp = (data & INTERNAL_TEMP_MASK) << INTERNAL_TEMP_OFFSET;
-	result->short_vcc     = (data & SHORT_VCC_MASK)     << SHORT_VCC_OFFSET;
-	result->short_gnd     = (data & SHORT_GND_MASK)     << SHORT_GND_OFFSET;
-	result->open_circuit  = (data & OPEN_CIRCUIT_MASK)  << OPNE_CIRCUIT_OFFSET;
-
 	return 0;
 }
 
@@ -55,8 +54,11 @@ static inline uint32_t spi_read_long()
 	CS_PORT  &= ~CS_PIN;
 
 	for (char count = 32; count > 0; count--) {
+		_delay_ms(1);
 		CLK_PORT |= CLK_PIN;
+		_delay_ms(1);
 		data = (data << 1) | !!(DATA_PORT & DATA_PIN);
+		_delay_ms(1);
 		CLK_PORT &= ~CLK_PIN;
 	}
 
