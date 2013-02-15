@@ -67,15 +67,17 @@ int main()
 			}
 
 			result = process_reading(reading, target_probe_temp);
-			if (result > 0)
-				filament_turn_on(&top_filament);
-			else
-				filament_turn_off(&top_filament);
+			if (filaments_enabled) {
+				if (result > 0)
+					filament_turn_on(&top_filament);
+				else
+					filament_turn_off(&top_filament);
 
-			if (result > 1)
-				filament_turn_on(&bottom_filament);
-			else
-				filament_turn_off(&bottom_filament);
+				if (result > 1)
+					filament_turn_on(&bottom_filament);
+				else
+					filament_turn_off(&bottom_filament);
+			}
 
 			Endpoint_Write_16_LE(reading.probe_temp);
 			Endpoint_Write_16_LE(reading.internal_temp);
