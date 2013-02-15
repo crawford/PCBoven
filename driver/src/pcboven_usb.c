@@ -3,7 +3,7 @@
 #include <linux/slab.h>
 #include "pcboven_usb.h"
 
-#define IN_BUF_LEN  8
+#define IN_BUF_LEN  9
 #define IN_INTERVAL 1
 #define IN_EP       0x01
 #define OUT_EP      0x02
@@ -18,6 +18,8 @@ struct oven {
 	bool fault_short_vcc;
 	bool fault_short_gnd;
 	bool fault_open_circuit;
+	bool filament_top_on;
+	bool filament_bottom_on;
 };
 
 struct transfer_context {
@@ -31,6 +33,8 @@ struct __attribute__ ((__packed__)) oven_usb_frame {
 	uint8_t short_vcc;
 	uint8_t short_gnd;
 	uint8_t open_circuit;
+	uint8_t top_on;
+	uint8_t bottom_on;
 };
 
 static struct usb_device_id id_table [] = {
@@ -91,6 +95,24 @@ ssize_t fault_open_circuit_show(struct device *dev, struct device_attribute *att
 
 DEVICE_ATTR(fault_open_circuit, S_IRUSR | S_IWUSR, fault_open_circuit_show, NULL);
 
+ssize_t filament_top_on_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct usb_interface *intf = to_usb_interface(dev);
+	struct transfer_context *context = usb_get_intfdata(intf);
+	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.filament_top_on);
+}
+
+DEVICE_ATTR(filament_top_on, S_IRUSR | S_IWUSR, filament_top_on_show, NULL);
+
+ssize_t filament_bottom_on_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct usb_interface *intf = to_usb_interface(dev);
+	struct transfer_context *context = usb_get_intfdata(intf);
+	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.filament_bottom_on);
+}
+
+DEVICE_ATTR(filament_bottom_on, S_IRUSR | S_IWUSR, filament_bottom_on_show, NULL);
+
 
 int __init init_module()
 {
@@ -137,6 +159,12 @@ int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table)
 		if (ret = device_create_file(&intf->dev, &dev_attr_fault_open_circuit), ret)
 			printk(KERN_ERR "device_create_file(): %d\n", ret);
 
+		if (ret = device_create_file(&intf->dev, &dev_attr_filament_top_on), ret)
+			printk(KERN_ERR "device_create_file(): %d\n", ret);
+
+		if (ret = device_create_file(&intf->dev, &dev_attr_filament_bottom_on), ret)
+			printk(KERN_ERR "device_create_file(): %d\n", ret);
+
 		context = kzalloc(sizeof(struct transfer_context), GFP_KERNEL);
 		if (context == NULL)
 			return -ENOMEM;
@@ -171,6 +199,8 @@ void usb_disconnect(struct usb_interface *intf)
 	device_remove_file(&intf->dev, &dev_attr_fault_short_gnd);
 	device_remove_file(&intf->dev, &dev_attr_fault_short_vcc);
 	device_remove_file(&intf->dev, &dev_attr_fault_open_circuit);
+	device_remove_file(&intf->dev, &dev_attr_filament_top_on);
+	device_remove_file(&intf->dev, &dev_attr_filament_bottom_on);
 
 	kfree(usb_get_intfdata(intf));
 
@@ -195,6 +225,8 @@ void intr_callback(struct urb *urb)
 			oven->fault_short_vcc    = !!reading->short_vcc;
 			oven->fault_short_gnd    = !!reading->short_gnd;
 			oven->fault_open_circuit = !!reading->open_circuit;
+			oven->filament_top_on    = !!reading->top_on;
+			oven->filament_bottom_on = !!reading->bottom_on;
 		}
 	} else {
 		printk(KERN_ERR "Urb failed with: %d", urb->status);
