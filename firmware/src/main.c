@@ -9,10 +9,10 @@
 #include "filament.h"
 
 #define TEMP_READ_RATE 1
-#define FILAMENT_TOP_PORT    &PORTB
-#define FILAMENT_TOP_PIN     2
-#define FILAMENT_BOTTOM_PORT &PORTB
-#define FILAMENT_BOTTOM_PIN  5
+#define FILAMENT_TOP_PORT    PORTF
+#define FILAMENT_TOP_PIN     5
+#define FILAMENT_BOTTOM_PORT PORTF
+#define FILAMENT_BOTTOM_PIN  6
 
 void platform_init();
 int process_reading(struct max31855_result reading, int16_t target);
@@ -26,13 +26,15 @@ int main()
 	struct max31855_result reading;
 	struct filament top_filament =
 	{
-		.port = FILAMENT_TOP_PORT,
-		.pin  = FILAMENT_TOP_PIN
+		.port = &FILAMENT_TOP_PORT,
+		.pin  = FILAMENT_TOP_PIN,
+		.on   = false
 	};
 	struct filament bottom_filament =
 	{
-		.port = FILAMENT_BOTTOM_PORT,
-		.pin  = FILAMENT_BOTTOM_PIN
+		.port = &FILAMENT_BOTTOM_PORT,
+		.pin  = FILAMENT_BOTTOM_PIN,
+		.on   = false
 	};
 	int result;
 

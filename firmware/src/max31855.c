@@ -4,11 +4,11 @@
 #include "max31855.h"
 
 #define CS_PORT    PORTF
-#define CS_PIN     (1 << 4)
+#define CS_PIN     (1 << 1)
 #define CLK_PORT   PORTF
-#define CLK_PIN    (1 << 5)
+#define CLK_PIN    (1 << 4)
 #define DATA_PORT  PINF
-#define DATA_PIN   (1 << 1)
+#define DATA_PIN   (1 << 0)
 
 #define PROBE_TEMP_MASK        0xFFFC0000
 #define PROBE_TEMP_OFFSET      18
