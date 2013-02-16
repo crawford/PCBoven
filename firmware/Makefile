@@ -55,6 +55,7 @@ ELF = $(BUILD_DIR)/$(TARGET).elf
 SRC = $(SRC_DIR)/main.c        \
       $(SRC_DIR)/max31855.c    \
       $(SRC_DIR)/descriptors.c \
+      $(SRC_DIR)/filament.c    \
       $(LUFA_SRC_USB)          \
       $(LUFA_SRC_USBCLASS)
 

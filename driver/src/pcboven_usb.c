@@ -3,7 +3,8 @@
 #include <linux/slab.h>
 #include "pcboven_usb.h"
 
-#define IN_BUF_LEN  8
+#define IN_BUF_LEN  9
+#define OUT_BUF_LEN 3
 #define IN_INTERVAL 1
 #define IN_EP       0x01
 #define OUT_EP      0x02
@@ -11,13 +12,17 @@
 void intr_callback(struct urb *urb);
 int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table);
 void usb_disconnect(struct usb_interface *intf);
+void urb_complete(struct urb *urb);
 
 struct oven {
 	int16_t probe_temp;
 	int16_t internal_temp;
+	int16_t target_temp;
 	bool fault_short_vcc;
 	bool fault_short_gnd;
 	bool fault_open_circuit;
+	bool filament_top_on;
+	bool filament_bottom_on;
 };
 
 struct transfer_context {
@@ -31,6 +36,8 @@ struct __attribute__ ((__packed__)) oven_usb_frame {
 	uint8_t short_vcc;
 	uint8_t short_gnd;
 	uint8_t open_circuit;
+	uint8_t top_on;
+	uint8_t bottom_on;
 };
 
 static struct usb_device_id id_table [] = {
@@ -53,7 +60,7 @@ ssize_t probe_temp_show(struct device *dev, struct device_attribute *attr, char 
 	return scnprintf(buf, PAGE_SIZE, "%d C", context->oven.probe_temp);
 }
 
-DEVICE_ATTR(probe_temp, S_IRUSR | S_IWUSR, probe_temp_show, NULL);
+DEVICE_ATTR(probe_temp, S_IRUSR, probe_temp_show, NULL);
 
 ssize_t internal_temp_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -62,7 +69,7 @@ ssize_t internal_temp_show(struct device *dev, struct device_attribute *attr, ch
 	return scnprintf(buf, PAGE_SIZE, "%d C", context->oven.probe_temp);
 }
 
-DEVICE_ATTR(internal_temp, S_IRUSR | S_IWUSR, internal_temp_show, NULL);
+DEVICE_ATTR(internal_temp, S_IRUSR, internal_temp_show, NULL);
 
 ssize_t fault_short_vcc_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -71,7 +78,7 @@ ssize_t fault_short_vcc_show(struct device *dev, struct device_attribute *attr, 
 	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.probe_temp);
 }
 
-DEVICE_ATTR(fault_short_vcc, S_IRUSR | S_IWUSR, fault_short_vcc_show, NULL);
+DEVICE_ATTR(fault_short_vcc, S_IRUSR, fault_short_vcc_show, NULL);
 
 ssize_t fault_short_gnd_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -80,7 +87,7 @@ ssize_t fault_short_gnd_show(struct device *dev, struct device_attribute *attr, 
 	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.probe_temp);
 }
 
-DEVICE_ATTR(fault_short_gnd, S_IRUSR | S_IWUSR, fault_short_gnd_show, NULL);
+DEVICE_ATTR(fault_short_gnd, S_IRUSR, fault_short_gnd_show, NULL);
 
 ssize_t fault_open_circuit_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -89,8 +96,74 @@ ssize_t fault_open_circuit_show(struct device *dev, struct device_attribute *att
 	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.probe_temp);
 }
 
-DEVICE_ATTR(fault_open_circuit, S_IRUSR | S_IWUSR, fault_open_circuit_show, NULL);
+DEVICE_ATTR(fault_open_circuit, S_IRUSR, fault_open_circuit_show, NULL);
 
+ssize_t filament_top_on_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct usb_interface *intf = to_usb_interface(dev);
+	struct transfer_context *context = usb_get_intfdata(intf);
+	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.filament_top_on);
+}
+
+DEVICE_ATTR(filament_top_on, S_IRUSR, filament_top_on_show, NULL);
+
+ssize_t filament_bottom_on_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct usb_interface *intf = to_usb_interface(dev);
+	struct transfer_context *context = usb_get_intfdata(intf);
+	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.filament_bottom_on);
+}
+
+DEVICE_ATTR(filament_bottom_on, S_IRUSR, filament_bottom_on_show, NULL);
+
+ssize_t target_temp_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct usb_interface *intf = to_usb_interface(dev);
+	struct transfer_context *context = usb_get_intfdata(intf);
+	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.target_temp);
+}
+
+ssize_t target_temp_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct urb *request;
+	int result;
+	int val;
+
+	struct usb_interface *intf = to_usb_interface(dev);
+	struct usb_device *usbdev = interface_to_usbdev(intf);
+	struct transfer_context *context = usb_get_intfdata(intf);
+
+	uint8_t *out_buf;
+
+	if (sscanf(buf, "%d", &val) != 1)
+		return -EINVAL;
+
+	context->oven.target_temp = val;
+
+	out_buf = kmalloc(sizeof(char) * OUT_BUF_LEN, GFP_KERNEL);
+	out_buf[0] = (context->oven.target_temp >> 0) & 0xFF;
+	out_buf[1] = (context->oven.target_temp >> 8) & 0xFF;
+	out_buf[2] = 1; // Enable the filaments
+
+	request = usb_alloc_urb(0, GFP_KERNEL);
+	usb_fill_bulk_urb(request,
+	                  usbdev,
+	                  usb_sndbulkpipe(usbdev, OUT_EP),
+	                  out_buf,
+	                  OUT_BUF_LEN,
+	                  &urb_complete,
+	                  out_buf);
+
+	result = usb_submit_urb(request, GFP_KERNEL);
+	if (result) {
+		printk(KERN_ERR "Error writing urb (%d)", result);
+		return -EFAULT;
+	}
+
+	return strlen(buf);
+}
+
+DEVICE_ATTR(target_temp, S_IRUSR | S_IWUSR, target_temp_show, target_temp_store);
 
 int __init init_module()
 {
@@ -137,6 +210,15 @@ int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table)
 		if (ret = device_create_file(&intf->dev, &dev_attr_fault_open_circuit), ret)
 			printk(KERN_ERR "device_create_file(): %d\n", ret);
 
+		if (ret = device_create_file(&intf->dev, &dev_attr_filament_top_on), ret)
+			printk(KERN_ERR "device_create_file(): %d\n", ret);
+
+		if (ret = device_create_file(&intf->dev, &dev_attr_filament_bottom_on), ret)
+			printk(KERN_ERR "device_create_file(): %d\n", ret);
+
+		if (ret = device_create_file(&intf->dev, &dev_attr_target_temp), ret)
+			printk(KERN_ERR "device_create_file(): %d\n", ret);
+
 		context = kzalloc(sizeof(struct transfer_context), GFP_KERNEL);
 		if (context == NULL)
 			return -ENOMEM;
@@ -171,6 +253,9 @@ void usb_disconnect(struct usb_interface *intf)
 	device_remove_file(&intf->dev, &dev_attr_fault_short_gnd);
 	device_remove_file(&intf->dev, &dev_attr_fault_short_vcc);
 	device_remove_file(&intf->dev, &dev_attr_fault_open_circuit);
+	device_remove_file(&intf->dev, &dev_attr_filament_top_on);
+	device_remove_file(&intf->dev, &dev_attr_filament_bottom_on);
+	device_remove_file(&intf->dev, &dev_attr_target_temp);
 
 	kfree(usb_get_intfdata(intf));
 
@@ -195,6 +280,8 @@ void intr_callback(struct urb *urb)
 			oven->fault_short_vcc    = !!reading->short_vcc;
 			oven->fault_short_gnd    = !!reading->short_gnd;
 			oven->fault_open_circuit = !!reading->open_circuit;
+			oven->filament_top_on    = !!reading->top_on;
+			oven->filament_bottom_on = !!reading->bottom_on;
 		}
 	} else {
 		printk(KERN_ERR "Urb failed with: %d", urb->status);

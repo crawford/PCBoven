@@ -3,6 +3,8 @@
 
 #define MAX_31855_FAULT 1
 
+#include <stdint.h>
+
 struct max31855_result {
 	uint16_t probe_temp;
 	uint16_t internal_temp;
