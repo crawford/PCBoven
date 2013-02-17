@@ -66,7 +66,7 @@ ssize_t internal_temp_show(struct device *dev, struct device_attribute *attr, ch
 {
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct transfer_context *context = usb_get_intfdata(intf);
-	return scnprintf(buf, PAGE_SIZE, "%d C", context->oven.probe_temp);
+	return scnprintf(buf, PAGE_SIZE, "%d C", context->oven.internal_temp);
 }
 
 DEVICE_ATTR(internal_temp, S_IRUSR, internal_temp_show, NULL);
@@ -75,7 +75,7 @@ ssize_t fault_short_vcc_show(struct device *dev, struct device_attribute *attr, 
 {
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct transfer_context *context = usb_get_intfdata(intf);
-	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.probe_temp);
+	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.fault_short_vcc);
 }
 
 DEVICE_ATTR(fault_short_vcc, S_IRUSR, fault_short_vcc_show, NULL);
@@ -84,7 +84,7 @@ ssize_t fault_short_gnd_show(struct device *dev, struct device_attribute *attr, 
 {
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct transfer_context *context = usb_get_intfdata(intf);
-	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.probe_temp);
+	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.fault_short_gnd);
 }
 
 DEVICE_ATTR(fault_short_gnd, S_IRUSR, fault_short_gnd_show, NULL);
@@ -93,7 +93,7 @@ ssize_t fault_open_circuit_show(struct device *dev, struct device_attribute *att
 {
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct transfer_context *context = usb_get_intfdata(intf);
-	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.probe_temp);
+	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.fault_open_circuit);
 }
 
 DEVICE_ATTR(fault_open_circuit, S_IRUSR, fault_open_circuit_show, NULL);

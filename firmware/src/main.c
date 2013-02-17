@@ -10,9 +10,9 @@
 
 #define TEMP_READ_RATE 1
 #define FILAMENT_TOP_PORT    PORTF
-#define FILAMENT_TOP_PIN     5
+#define FILAMENT_TOP_PIN     0
 #define FILAMENT_BOTTOM_PORT PORTF
-#define FILAMENT_BOTTOM_PIN  6
+#define FILAMENT_BOTTOM_PIN  1
 
 void platform_init();
 int process_reading(struct max31855_result reading, int16_t target);
@@ -66,19 +66,21 @@ int main()
 
 			if (max31855_read(&reading)) {
 				LEDs_ToggleLEDs(LEDS_ALL_LEDS);
-			}
+				filament_turn_off(&top_filament);
+				filament_turn_off(&bottom_filament);
+			} else {
+				result = process_reading(reading, target_probe_temp);
+				if (filaments_enabled) {
+					if (result > 0)
+						filament_turn_on(&top_filament);
+					else
+						filament_turn_off(&top_filament);
 
-			result = process_reading(reading, target_probe_temp);
-			if (filaments_enabled) {
-				if (result > 0)
-					filament_turn_on(&top_filament);
-				else
-					filament_turn_off(&top_filament);
-
-				if (result > 1)
-					filament_turn_on(&bottom_filament);
-				else
-					filament_turn_off(&bottom_filament);
+					if (result > 1)
+						filament_turn_on(&bottom_filament);
+					else
+						filament_turn_off(&bottom_filament);
+				}
 			}
 
 			Endpoint_Write_16_LE(reading.probe_temp);
