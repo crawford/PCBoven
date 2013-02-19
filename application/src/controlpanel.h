@@ -2,6 +2,8 @@
 #define CONTROLPANEL_H
 
 #include <QMainWindow>
+#include <QLabel>
+#include "ovenmanager.h"
 
 namespace Ui {
 	class ControlPanel;
@@ -15,12 +17,18 @@ class ControlPanel : public QMainWindow
 		explicit ControlPanel(QWidget *parent = 0);
 		~ControlPanel();
 
-		private slots:
-			void on_actionStart_Reflow_triggered();
-		void on_actionStop_Reflow_triggered();
-
 	private:
 		Ui::ControlPanel *ui;
+		QLabel *lblConnectionStatus;
+		OvenManager *_ovenManager;
+		bool _reflowing;
+
+	private slots:
+		void on_actionStart_Reflow_triggered();
+		void on_actionStop_Reflow_triggered();
+		void ovenConnected();
+		void ovenDisconnected();
+		void enableActions();
 };
 
 #endif // CONTROLPANEL_H

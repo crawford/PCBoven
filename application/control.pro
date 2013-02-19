@@ -7,9 +7,15 @@ TEMPLATE = app
 
 
 SOURCES += src/main.cpp \
-           src/controlpanel.cpp
+           src/controlpanel.cpp \
+           src/ovenmanager.cpp \
+           src/udevmonitor.cpp \
+           src/ioctlworker.cpp
 
-HEADERS += src/controlpanel.h
+HEADERS += src/controlpanel.h \
+           src/ovenmanager.h \
+           src/udevmonitor.h \
+           src/ioctlworker.h
 
 FORMS   += ui/controlpanel.ui
 
