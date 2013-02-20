@@ -10,12 +10,14 @@ SOURCES += src/main.cpp \
            src/controlpanel.cpp \
            src/ovenmanager.cpp \
            src/udevmonitor.cpp \
-           src/ioctlworker.cpp
+           src/ioctlworker.cpp \
+           src/reflowgraphwidget.cpp
 
 HEADERS += src/controlpanel.h \
            src/ovenmanager.h \
            src/udevmonitor.h \
-           src/ioctlworker.h
+           src/ioctlworker.h \
+           src/reflowgraphwidget.h
 
 FORMS   += ui/controlpanel.ui
 

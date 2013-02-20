@@ -19,7 +19,7 @@ class ControlPanel : public QMainWindow
 
 	private:
 		Ui::ControlPanel *ui;
-		QLabel *lblConnectionStatus;
+		QLabel *connectionStatus;
 		OvenManager *_ovenManager;
 		bool _reflowing;
 
