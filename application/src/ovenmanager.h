@@ -3,7 +3,6 @@
 
 #include <QThread>
 #include "udevmonitor.h"
-#include "ioctlworker.h"
 
 struct OvenState {
 	int probeTemperature;
@@ -30,18 +29,13 @@ class OvenManager : public QObject
 		void disconnected();
 		void readingsRead(struct OvenState readings);
 		void errorOccurred(int error);
-		void setTemperature(int temperature);
-		void enableFilaments(bool enabled);
 
 	public slots:
 		void setFilamentsEnabled(bool enabled);
 		void setTargetTemperature(int temperature);
 
 	private:
-		QThread *_ioctlCmdThread;
-		QThread *_ioctlReadingThread;
 		UdevMonitor *_udevMonitor;
-		IoctlWorker *_ioctlWorker;
 		int _targetTemperature;
 		bool _filamentsEnabled;
 		bool _connected;

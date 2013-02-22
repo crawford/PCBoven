@@ -1,3 +1,4 @@
+#include <linux/usb.h>
 #include <linux/module.h>
 #include <linux/errno.h>
 #include <linux/slab.h>
@@ -13,11 +14,13 @@ void intr_callback(struct urb *urb);
 int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table);
 void usb_disconnect(struct usb_interface *intf);
 void urb_complete(struct urb *urb);
+int usb_ioctl(struct usb_interface *intf, unsigned int code, void *buf);
 
 struct oven {
 	int16_t probe_temp;
 	int16_t internal_temp;
 	int16_t target_temp;
+	bool enable_filaments;
 	bool fault_short_vcc;
 	bool fault_short_gnd;
 	bool fault_open_circuit;
@@ -50,14 +53,15 @@ static struct usb_driver driver_info = {
 	.name = "PCBoven",
 	.probe = &usb_probe,
 	.id_table = id_table,
-	.disconnect = &usb_disconnect
+	.disconnect = &usb_disconnect,
+	.unlocked_ioctl = &usb_ioctl,
 };
 
 ssize_t probe_temp_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct transfer_context *context = usb_get_intfdata(intf);
-	return scnprintf(buf, PAGE_SIZE, "%d C", context->oven.probe_temp);
+	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.probe_temp);
 }
 
 DEVICE_ATTR(probe_temp, S_IRUSR, probe_temp_show, NULL);
@@ -66,7 +70,7 @@ ssize_t internal_temp_show(struct device *dev, struct device_attribute *attr, ch
 {
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct transfer_context *context = usb_get_intfdata(intf);
-	return scnprintf(buf, PAGE_SIZE, "%d C", context->oven.internal_temp);
+	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.internal_temp);
 }
 
 DEVICE_ATTR(internal_temp, S_IRUSR, internal_temp_show, NULL);
@@ -143,7 +147,7 @@ ssize_t target_temp_store(struct device *dev, struct device_attribute *attr, con
 	out_buf = kmalloc(sizeof(char) * OUT_BUF_LEN, GFP_KERNEL);
 	out_buf[0] = (context->oven.target_temp >> 0) & 0xFF;
 	out_buf[1] = (context->oven.target_temp >> 8) & 0xFF;
-	out_buf[2] = 1; // Enable the filaments
+	out_buf[2] = context->oven.enable_filaments;
 
 	request = usb_alloc_urb(0, GFP_KERNEL);
 	usb_fill_bulk_urb(request,
@@ -298,4 +302,27 @@ void urb_complete(struct urb *urb)
 	kfree(urb->context);
 	usb_free_urb(urb);
 }
+
+int usb_ioctl(struct usb_interface *intf, unsigned int code, void *buf)
+{
+	struct transfer_context *context = usb_get_intfdata(intf);
+	int temp = *((int *)buf);
+
+	switch (code) {
+	case PCB_OVEN_SET_TEMPERATURE:
+		context->oven.target_temp = (int16_t)temp;
+		return 0;
+	case PCB_OVEN_ENABLE_FILAMENTS:
+		context->oven.enable_filaments = true;
+		return 0;
+	case PCB_OVEN_DISABLE_FILAMENTS:
+		context->oven.enable_filaments = false;
+		return 0;
+	default:
+		return -ENOTTY;
+	}
+}
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Alex Crawford");
 

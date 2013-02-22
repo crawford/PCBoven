@@ -32,3 +32,4 @@ class ControlPanel : public QMainWindow
 };
 
 #endif // CONTROLPANEL_H
+

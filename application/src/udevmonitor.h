@@ -19,3 +19,4 @@ class UdevMonitor : public QThread
 };
 
 #endif // UDEVMONITOR_H
+

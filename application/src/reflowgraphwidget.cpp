@@ -89,3 +89,4 @@ void ReflowGraphWidget::paintEvent(QPaintEvent *)
 		painter.drawPath(patha);
 	}
 }
+

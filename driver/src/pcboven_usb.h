@@ -1,13 +1,16 @@
 #ifndef __PCBOVEN_USB_H__
 #define __PCBOVEN_USB_H__
 
-#include <linux/usb.h>
+#include <linux/ioctl.h>
 
 #define USB_ID_VENDOR    0x03EB
 #define USB_ID_PRODUCT   0x3140
 
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Alex Crawford");
+#define PCBOVEN_IOCTL_MAGIC 0xA1
+
+#define PCB_OVEN_SET_TEMPERATURE   _IOW(PCBOVEN_IOCTL_MAGIC, 'T', int)
+#define PCB_OVEN_ENABLE_FILAMENTS  _IO(PCBOVEN_IOCTL_MAGIC, 'E')
+#define PCB_OVEN_DISABLE_FILAMENTS _IO(PCBOVEN_IOCTL_MAGIC, 'D')
 
 #endif
 

@@ -1,3 +1,5 @@
+#include <QMessageBox>
+#include <errno.h>
 #include "controlpanel.h"
 #include "ui_controlpanel.h"
 
@@ -10,7 +12,7 @@ ControlPanel::ControlPanel(QWidget *parent) : QMainWindow(parent), ui(new Ui::Co
 	connect(_ovenManager, &OvenManager::disconnected, this, &ControlPanel::ovenDisconnected);
 
 	ui->setupUi(this);
-	connectionStatus = new QLabel("Not Connected");
+	connectionStatus = new QLabel("Waiting for connection");
 	ui->statusBar->addPermanentWidget(connectionStatus);
 
 	QMap<QTime, int> vtemps;
@@ -33,7 +35,7 @@ void ControlPanel::on_actionStart_Reflow_triggered()
 	_reflowing = true;
 	ui->reflowGraph->clearGraph();
 	ui->actionStart_Reflow->setEnabled(false);
-	ui->actionStop_Reflow->setEnabled(false);
+	ui->actionStop_Reflow->setEnabled(true);
 	_ovenManager->setFilamentsEnabled(true);
 
 	QPair<QTime, int> temps[] = { QPair<QTime, int>(QTime(0, 0, 0), 5),
@@ -53,7 +55,7 @@ void ControlPanel::on_actionStart_Reflow_triggered()
 void ControlPanel::on_actionStop_Reflow_triggered()
 {
 	_reflowing = false;
-	ui->actionStart_Reflow->setEnabled(false);
+	ui->actionStart_Reflow->setEnabled(true);
 	ui->actionStop_Reflow->setEnabled(false);
 	_ovenManager->setFilamentsEnabled(false);
 }
@@ -70,10 +72,19 @@ void ControlPanel::ovenDisconnected()
 {
 	ui->actionStart_Reflow->setEnabled(false);
 	ui->actionStop_Reflow->setEnabled(false);
-	connectionStatus->setText("Not Connected");
+	connectionStatus->setText("Disconnected");
 }
 
 void ControlPanel::handleError(int error)
 {
 	ui->statusBar->showMessage(QString("An error occured (%1)").arg(error));
+	switch (error) {
+	case ENOENT:
+		QMessageBox::critical(this, "Failed to connect to oven", "An oven pluggin event was detected, but the device file could not be opened. Make sure the udev rule is installed.");
+		break;
+	default:
+		QMessageBox::critical(this, "Well fuck me", QString().setNum(error));
+		break;
+	}
 }
+

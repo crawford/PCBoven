@@ -29,3 +29,4 @@ class ReflowGraphWidget : public QWidget
 };
 
 #endif // REFLOWGRAPHWIDGET_H
+
