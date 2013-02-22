@@ -29,8 +29,9 @@ class OvenManager : public QObject
 		void connected();
 		void disconnected();
 		void readingsRead(struct OvenState readings);
-		void settingsSent();
-		void settings(bool enabled, int temperature);
+		void errorOccurred(int error);
+		void setTemperature(int temperature);
+		void enableFilaments(bool enabled);
 
 	public slots:
 		void setFilamentsEnabled(bool enabled);
@@ -43,6 +44,12 @@ class OvenManager : public QObject
 		IoctlWorker *_ioctlWorker;
 		int _targetTemperature;
 		bool _filamentsEnabled;
+		bool _connected;
+		int _ioctlFd;
+
+	private slots:
+		void handleOvenProbed();
+		void handleOvenRemoved();
 };
 
 #endif // OVENMANAGER_H

@@ -9,12 +9,19 @@ class IoctlWorker : public QObject
 
 	public:
 		explicit IoctlWorker(QObject *parent = 0);
+		virtual ~IoctlWorker();
+		void initialize();
 
 	signals:
-		void settingsSent();
+		void errorOccurred(int error);
 
 	public slots:
-		void sendSettings(bool enabled, int temperature);
+		void setTemperature(int temperature);
+		void enableFilaments(bool enabled);
+		void waitForReadings();
+
+	protected:
+		int _ioctlFd;
 
 };
 

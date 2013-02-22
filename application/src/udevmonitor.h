@@ -11,8 +11,8 @@ class UdevMonitor : public QThread
 		explicit UdevMonitor(QObject *parent = 0);
 
 	signals:
-		void connected();
-		void disconnected();
+		void ovenProbed();
+		void ovenRemoved();
 
 	protected:
 		void run();

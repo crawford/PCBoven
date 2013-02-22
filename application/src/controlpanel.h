@@ -28,7 +28,7 @@ class ControlPanel : public QMainWindow
 		void on_actionStop_Reflow_triggered();
 		void ovenConnected();
 		void ovenDisconnected();
-		void enableActions();
+		void handleError(int error);
 };
 
 #endif // CONTROLPANEL_H
