@@ -11,6 +11,7 @@
 #define OUT_EP      0x02
 
 void intr_callback(struct urb *urb);
+int write_settings(struct usb_device *usbdev, int16_t temp, bool filaments);
 int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table);
 void usb_disconnect(struct usb_interface *intf);
 void urb_complete(struct urb *urb);
@@ -129,42 +130,17 @@ ssize_t target_temp_show(struct device *dev, struct device_attribute *attr, char
 
 ssize_t target_temp_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
-	struct urb *request;
-	int result;
-	int val;
-
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_device *usbdev = interface_to_usbdev(intf);
 	struct transfer_context *context = usb_get_intfdata(intf);
-
-	uint8_t *out_buf;
+	int val;
 
 	if (sscanf(buf, "%d", &val) != 1)
 		return -EINVAL;
 
 	context->oven.target_temp = val;
 
-	out_buf = kmalloc(sizeof(char) * OUT_BUF_LEN, GFP_KERNEL);
-	out_buf[0] = (context->oven.target_temp >> 0) & 0xFF;
-	out_buf[1] = (context->oven.target_temp >> 8) & 0xFF;
-	out_buf[2] = context->oven.enable_filaments;
-
-	request = usb_alloc_urb(0, GFP_KERNEL);
-	usb_fill_bulk_urb(request,
-	                  usbdev,
-	                  usb_sndbulkpipe(usbdev, OUT_EP),
-	                  out_buf,
-	                  OUT_BUF_LEN,
-	                  &urb_complete,
-	                  out_buf);
-
-	result = usb_submit_urb(request, GFP_KERNEL);
-	if (result) {
-		printk(KERN_ERR "Error writing urb (%d)", result);
-		return -EFAULT;
-	}
-
-	return strlen(buf);
+	return write_settings(usbdev, context->oven.target_temp, context->oven.enable_filaments) ?: strlen(buf);
 }
 
 DEVICE_ATTR(target_temp, S_IRUSR | S_IWUSR, target_temp_show, target_temp_store);
@@ -296,31 +272,83 @@ void intr_callback(struct urb *urb)
 		printk(KERN_ERR "Error reregistering urb (%d)", result);
 }
 
+int write_settings(struct usb_device *usbdev, int16_t temp, bool filaments)
+{
+	struct urb *request = NULL;
+	uint8_t *out_buf;
+	int result;
+
+	out_buf = kmalloc(sizeof(char) * OUT_BUF_LEN, GFP_KERNEL);
+	if (out_buf == NULL) {
+		printk(KERN_ERR "Error allocating buffer\n");
+		result = -ENOMEM;
+		goto error;
+	}
+
+	out_buf[0] = (temp >> 0) & 0xFF;
+	out_buf[1] = (temp >> 8) & 0xFF;
+	out_buf[2] = filaments ? 1 : 0;
+
+	request = usb_alloc_urb(0, GFP_KERNEL);
+	if (request == NULL) {
+		printk(KERN_ERR "Error allocating urb\n");
+		result = -ENOMEM;
+		goto error;
+	}
+
+	usb_fill_bulk_urb(request,
+	                  usbdev,
+	                  usb_sndbulkpipe(usbdev, OUT_EP),
+	                  out_buf,
+	                  OUT_BUF_LEN,
+	                  &urb_complete,
+	                  out_buf);
+
+	result = usb_submit_urb(request, GFP_KERNEL);
+	if (result) {
+		printk(KERN_ERR "Error writing urb (%d)\n", result);
+		goto error;
+	}
+
+	return 0;
+
+error:
+	if (out_buf)
+		kfree(out_buf);
+	if (request)
+		kfree(request);
+
+	return result;
+}
+
 void urb_complete(struct urb *urb)
 {
 	printk(KERN_ERR "Urb status: %d", urb->status);
-	kfree(urb->context);
+	kfree(urb->transfer_buffer);
 	usb_free_urb(urb);
 }
 
 int usb_ioctl(struct usb_interface *intf, unsigned int code, void *buf)
 {
 	struct transfer_context *context = usb_get_intfdata(intf);
+	struct usb_device *usbdev = interface_to_usbdev(intf);
 	int temp = *((int *)buf);
 
 	switch (code) {
 	case PCB_OVEN_SET_TEMPERATURE:
 		context->oven.target_temp = (int16_t)temp;
-		return 0;
+		break;
 	case PCB_OVEN_ENABLE_FILAMENTS:
 		context->oven.enable_filaments = true;
-		return 0;
+		break;
 	case PCB_OVEN_DISABLE_FILAMENTS:
 		context->oven.enable_filaments = false;
-		return 0;
+		break;
 	default:
 		return -ENOTTY;
 	}
+
+	return write_settings(usbdev, context->oven.target_temp, context->oven.enable_filaments);
 }
 
 MODULE_LICENSE("GPL");
