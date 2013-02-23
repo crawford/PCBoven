@@ -1,7 +1,7 @@
 #include <QFile>
-#include <QDebug>
 #include <QMessageBox>
 #include <errno.h>
+#include <iostream>
 #include "controlpanel.h"
 #include "ui_controlpanel.h"
 
@@ -18,14 +18,17 @@ ControlPanel::ControlPanel(QWidget *parent) : QMainWindow(parent), ui(new Ui::Co
 	ui->statusBar->addPermanentWidget(connectionStatus);
 
 
-	QFile rawProfile("example-profile.json");
-	if (!rawProfile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-		qDebug() << "couldn't open";
-		return;
+	QFile rawProfile(qApp->arguments().last());
+	if (rawProfile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		_profile = ReflowProfile::parseFromJson(rawProfile.readAll());
+		rawProfile.close();
+		ui->reflowGraph->setTemperatureTargets(_profile.getProfile());
+	} else {
+		std::cerr << "Could not open '"
+		          << qApp->arguments().last().toUtf8().data()
+		          << "'"
+		          << std::endl;
 	}
-	_profile = ReflowProfile::parseFromJson(rawProfile.readAll());
-	rawProfile.close();
-	ui->reflowGraph->setTemperatureTargets(_profile.getProfile());
 
 	_ovenManager->start();
 }
