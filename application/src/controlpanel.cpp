@@ -1,3 +1,5 @@
+#include <QFile>
+#include <QDebug>
 #include <QMessageBox>
 #include <errno.h>
 #include "controlpanel.h"
@@ -15,12 +17,15 @@ ControlPanel::ControlPanel(QWidget *parent) : QMainWindow(parent), ui(new Ui::Co
 	connectionStatus = new QLabel("Waiting for connection");
 	ui->statusBar->addPermanentWidget(connectionStatus);
 
-	QMap<QTime, int> vtemps;
-	vtemps.insert(QTime(0, 0, 0), 0);
-	vtemps.insert(QTime(0, 0, 10), 150);
-	vtemps.insert(QTime(0, 0, 15), 200);
-	vtemps.insert(QTime(0, 0, 30), 0);
-	ui->reflowGraph->setTemperatureTargets(vtemps);
+
+	QFile rawProfile("example-profile.json");
+	if (!rawProfile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		qDebug() << "couldn't open";
+		return;
+	}
+	_profile = ReflowProfile::parseFromJson(rawProfile.readAll());
+	rawProfile.close();
+	ui->reflowGraph->setTemperatureTargets(_profile.getProfile());
 
 	_ovenManager->start();
 }

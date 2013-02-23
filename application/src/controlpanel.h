@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QLabel>
 #include "ovenmanager.h"
+#include "reflowprofile.h"
 
 namespace Ui {
 	class ControlPanel;
@@ -21,6 +22,7 @@ class ControlPanel : public QMainWindow
 		Ui::ControlPanel *ui;
 		QLabel *connectionStatus;
 		OvenManager *_ovenManager;
+		ReflowProfile _profile;
 		bool _reflowing;
 
 	private slots:
