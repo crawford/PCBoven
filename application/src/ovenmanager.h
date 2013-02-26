@@ -1,10 +1,10 @@
 #ifndef OVENMANAGER_H
 #define OVENMANAGER_H
 
-#include <QThread>
-#include "udevmonitor.h"
+#include <signal.h>
+#include <QTime>
 
-struct OvenState {
+struct oven_state {
 	int probeTemperature;
 	int internalTemperature;
 	bool faultOpenCircuit;
@@ -27,23 +27,24 @@ class OvenManager : public QObject
 	signals:
 		void connected();
 		void disconnected();
-		void readingsRead(struct OvenState readings);
+		void readingsRead(struct oven_state readings, QTime timestamp);
 		void errorOccurred(int error);
 
 	public slots:
 		void setFilamentsEnabled(bool enabled);
 		void setTargetTemperature(int temperature);
 
+	protected:
+		static void register_sigio_receiver(OvenManager *receiver);
+		static void top_sigio_handler(int signal);
+
 	private:
-		UdevMonitor *_udevMonitor;
+		void sigio_handler(int sig);
+
 		int _targetTemperature;
 		bool _filamentsEnabled;
 		bool _connected;
 		int _ioctlFd;
-
-	private slots:
-		void handleOvenProbed();
-		void handleOvenRemoved();
 };
 
 #endif // OVENMANAGER_H

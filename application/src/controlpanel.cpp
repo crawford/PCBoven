@@ -13,10 +13,15 @@ ControlPanel::ControlPanel(QWidget *parent) : QMainWindow(parent), ui(new Ui::Co
 	connect(_ovenManager, &OvenManager::connected, this, &ControlPanel::ovenConnected);
 	connect(_ovenManager, &OvenManager::disconnected, this, &ControlPanel::ovenDisconnected);
 
+	_reflowTimer = new QTimer(this);
+	_reflowTimer->setInterval(ControlPanel::REFLOW_CHECK_PERIOD_MS);
+	connect(_reflowTimer, &QTimer::timeout, this, &ControlPanel::checkProfile);
+
 	ui->setupUi(this);
 	connectionStatus = new QLabel("Waiting for connection");
+	reflowStatus = new QLabel("");
 	ui->statusBar->addPermanentWidget(connectionStatus);
-
+	ui->statusBar->addPermanentWidget(reflowStatus);
 
 	QFile rawProfile(qApp->arguments().last());
 	if (rawProfile.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -41,10 +46,14 @@ ControlPanel::~ControlPanel()
 void ControlPanel::on_actionStart_Reflow_triggered()
 {
 	_reflowing = true;
+	_reflowStartTime.start();
 	ui->reflowGraph->clearGraph();
 	ui->actionStart_Reflow->setEnabled(false);
 	ui->actionStop_Reflow->setEnabled(true);
 	_ovenManager->setFilamentsEnabled(true);
+
+	connect(_ovenManager, &OvenManager::readingsRead, this, &ControlPanel::logReadings);
+	_reflowTimer->start();
 
 	QPair<QTime, int> temps[] = { QPair<QTime, int>(QTime(0, 0, 0), 5),
 								  QPair<QTime, int>(QTime(0, 0, 2), 10),
@@ -63,9 +72,11 @@ void ControlPanel::on_actionStart_Reflow_triggered()
 void ControlPanel::on_actionStop_Reflow_triggered()
 {
 	_reflowing = false;
+	_reflowTimer->stop();
 	ui->actionStart_Reflow->setEnabled(true);
 	ui->actionStop_Reflow->setEnabled(false);
 	_ovenManager->setFilamentsEnabled(false);
+	disconnect(_ovenManager, &OvenManager::readingsRead, this, &ControlPanel::logReadings);
 }
 
 void ControlPanel::ovenConnected()
@@ -88,11 +99,24 @@ void ControlPanel::handleError(int error)
 	ui->statusBar->showMessage(QString("An error occured (%1)").arg(error));
 	switch (error) {
 	case ENOENT:
-		QMessageBox::critical(this, "Failed to connect to oven", "An oven pluggin event was detected, but the device file could not be opened. Make sure the udev rule is installed.");
+		QMessageBox::critical(this, "Failed to connect to driver", "Could not find the pcboven device. Make sure that the driver is installed.");
+		break;
+	case EACCES:
+		QMessageBox::critical(this, "Failed to connect to driver", "Could not connect to the pcboven device. For now, run this as root. TODO ALEX");
 		break;
 	default:
 		QMessageBox::critical(this, "Well fuck me", QString().setNum(error));
 		break;
 	}
+}
+
+void ControlPanel::checkProfile()
+{
+	reflowStatus->setText(QTime(0, 0).addMSecs(_reflowStartTime.msecsTo(QTime::currentTime())).toString());
+}
+
+void ControlPanel::logReadings(struct oven_state state, QTime timestamp)
+{
+
 }
 

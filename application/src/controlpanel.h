@@ -3,6 +3,8 @@
 
 #include <QMainWindow>
 #include <QLabel>
+#include <QTime>
+#include <QTimer>
 #include "ovenmanager.h"
 #include "reflowprofile.h"
 
@@ -18,11 +20,17 @@ class ControlPanel : public QMainWindow
 		explicit ControlPanel(QWidget *parent = 0);
 		~ControlPanel();
 
+		static const int REFLOW_CHECK_PERIOD_MS = 1000;
+
+
 	private:
 		Ui::ControlPanel *ui;
 		QLabel *connectionStatus;
+		QLabel *reflowStatus;
 		OvenManager *_ovenManager;
 		ReflowProfile _profile;
+		QTime _reflowStartTime;
+		QTimer *_reflowTimer;
 		bool _reflowing;
 
 	private slots:
@@ -30,7 +38,9 @@ class ControlPanel : public QMainWindow
 		void on_actionStop_Reflow_triggered();
 		void ovenConnected();
 		void ovenDisconnected();
+		void logReadings(struct oven_state state, QTime timestamp);
 		void handleError(int error);
+		void checkProfile();
 };
 
 #endif // CONTROLPANEL_H

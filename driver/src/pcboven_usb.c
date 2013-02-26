@@ -1,5 +1,7 @@
 #include <linux/usb.h>
+#include <linux/miscdevice.h>
 #include <linux/module.h>
+#include <linux/fs.h>
 #include <linux/errno.h>
 #include <linux/slab.h>
 #include "pcboven_usb.h"
@@ -15,7 +17,7 @@ int write_settings(struct usb_device *usbdev, int16_t temp, bool filaments);
 int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table);
 void usb_disconnect(struct usb_interface *intf);
 void urb_complete(struct urb *urb);
-int usb_ioctl(struct usb_interface *intf, unsigned int code, void *buf);
+long oven_ioctl(struct file *file, unsigned int code, unsigned long data);
 
 struct oven {
 	int16_t probe_temp;
@@ -29,11 +31,6 @@ struct oven {
 	bool filament_bottom_on;
 };
 
-struct transfer_context {
-	struct oven oven;
-	uint8_t transfer_buffer[IN_BUF_LEN];
-};
-
 struct __attribute__ ((__packed__)) oven_usb_frame {
 	int16_t probe;
 	int16_t internal;
@@ -44,24 +41,67 @@ struct __attribute__ ((__packed__)) oven_usb_frame {
 	uint8_t bottom_on;
 };
 
+struct driver_context {
+	struct oven oven;
+	struct usb_device *usb_device;
+	//struct *fasync_struct;
+	uint8_t transfer_buffer[IN_BUF_LEN];
+};
+
+static struct driver_context *static_context = NULL;
+
+static struct file_operations oven_fops = {
+	.owner             = THIS_MODULE,
+	.llseek            = NULL,
+	.read              = NULL,
+	.write             = NULL,
+	.aio_read          = NULL,
+	.aio_write         = NULL,
+	.readdir           = NULL,
+	.poll              = NULL,
+	.unlocked_ioctl    = oven_ioctl,
+	.compat_ioctl      = oven_ioctl,
+	.mmap              = NULL,
+	.open              = NULL,
+	.flush             = NULL,
+	.release           = NULL,
+	.fsync             = NULL,
+	.aio_fsync         = NULL,
+	.lock              = NULL,
+	.sendpage          = NULL,
+	.get_unmapped_area = NULL,
+	.check_flags       = NULL,
+	.flock             = NULL,
+	.splice_write      = NULL,
+	.splice_read       = NULL,
+	.setlease          = NULL,
+	.fallocate         = NULL
+};
+
+static struct miscdevice oven_misc_device = {
+	.minor  = MISC_DYNAMIC_MINOR,
+	.name = "PCBoven",
+	.fops = &oven_fops,
+	.nodename = "pcboven"
+};
+
 static struct usb_device_id id_table [] = {
-	{ USB_DEVICE(USB_ID_VENDOR, USB_ID_PRODUCT) },
+	{ USB_DEVICE(PCBOVEN_USB_ID_VENDOR, PCBOVEN_USB_ID_PRODUCT) },
 	{ },
 };
 MODULE_DEVICE_TABLE(usb, id_table);
 
-static struct usb_driver driver_info = {
+static struct usb_driver oven_usb_driver = {
 	.name = "PCBoven",
 	.probe = &usb_probe,
 	.id_table = id_table,
-	.disconnect = &usb_disconnect,
-	.unlocked_ioctl = &usb_ioctl,
+	.disconnect = &usb_disconnect
 };
 
 ssize_t probe_temp_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct usb_interface *intf = to_usb_interface(dev);
-	struct transfer_context *context = usb_get_intfdata(intf);
+	struct driver_context *context = usb_get_intfdata(intf);
 	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.probe_temp);
 }
 
@@ -70,7 +110,7 @@ DEVICE_ATTR(probe_temp, S_IRUSR, probe_temp_show, NULL);
 ssize_t internal_temp_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct usb_interface *intf = to_usb_interface(dev);
-	struct transfer_context *context = usb_get_intfdata(intf);
+	struct driver_context *context = usb_get_intfdata(intf);
 	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.internal_temp);
 }
 
@@ -79,7 +119,7 @@ DEVICE_ATTR(internal_temp, S_IRUSR, internal_temp_show, NULL);
 ssize_t fault_short_vcc_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct usb_interface *intf = to_usb_interface(dev);
-	struct transfer_context *context = usb_get_intfdata(intf);
+	struct driver_context *context = usb_get_intfdata(intf);
 	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.fault_short_vcc);
 }
 
@@ -88,7 +128,7 @@ DEVICE_ATTR(fault_short_vcc, S_IRUSR, fault_short_vcc_show, NULL);
 ssize_t fault_short_gnd_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct usb_interface *intf = to_usb_interface(dev);
-	struct transfer_context *context = usb_get_intfdata(intf);
+	struct driver_context *context = usb_get_intfdata(intf);
 	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.fault_short_gnd);
 }
 
@@ -97,7 +137,7 @@ DEVICE_ATTR(fault_short_gnd, S_IRUSR, fault_short_gnd_show, NULL);
 ssize_t fault_open_circuit_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct usb_interface *intf = to_usb_interface(dev);
-	struct transfer_context *context = usb_get_intfdata(intf);
+	struct driver_context *context = usb_get_intfdata(intf);
 	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.fault_open_circuit);
 }
 
@@ -106,7 +146,7 @@ DEVICE_ATTR(fault_open_circuit, S_IRUSR, fault_open_circuit_show, NULL);
 ssize_t filament_top_on_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct usb_interface *intf = to_usb_interface(dev);
-	struct transfer_context *context = usb_get_intfdata(intf);
+	struct driver_context *context = usb_get_intfdata(intf);
 	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.filament_top_on);
 }
 
@@ -115,7 +155,7 @@ DEVICE_ATTR(filament_top_on, S_IRUSR, filament_top_on_show, NULL);
 ssize_t filament_bottom_on_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct usb_interface *intf = to_usb_interface(dev);
-	struct transfer_context *context = usb_get_intfdata(intf);
+	struct driver_context *context = usb_get_intfdata(intf);
 	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.filament_bottom_on);
 }
 
@@ -124,7 +164,7 @@ DEVICE_ATTR(filament_bottom_on, S_IRUSR, filament_bottom_on_show, NULL);
 ssize_t target_temp_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct usb_interface *intf = to_usb_interface(dev);
-	struct transfer_context *context = usb_get_intfdata(intf);
+	struct driver_context *context = usb_get_intfdata(intf);
 	return scnprintf(buf, PAGE_SIZE, "%d", context->oven.target_temp);
 }
 
@@ -132,7 +172,7 @@ ssize_t target_temp_store(struct device *dev, struct device_attribute *attr, con
 {
 	struct usb_interface *intf = to_usb_interface(dev);
 	struct usb_device *usbdev = interface_to_usbdev(intf);
-	struct transfer_context *context = usb_get_intfdata(intf);
+	struct driver_context *context = usb_get_intfdata(intf);
 	int val;
 
 	if (sscanf(buf, "%d", &val) != 1)
@@ -147,9 +187,16 @@ DEVICE_ATTR(target_temp, S_IRUSR | S_IWUSR, target_temp_show, target_temp_store)
 
 int __init init_module()
 {
-	int retval = usb_register(&driver_info);
+	int retval = usb_register(&oven_usb_driver);
 	if (retval) {
 		err("usb_register(): error %d\n", retval);
+		return -1;
+	}
+
+	retval = misc_register(&oven_misc_device);
+	if (retval) {
+		err("misc_register(): error %d\n", retval);
+		usb_deregister(&oven_usb_driver);
 		return -1;
 	}
 
@@ -160,70 +207,74 @@ int __init init_module()
 void __exit cleanup_module()
 {
 	printk("DESTROYING DRIVER\n");
-	usb_deregister(&driver_info);
+	usb_deregister(&oven_usb_driver);
+	misc_deregister(&oven_misc_device);
 }
 
 int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table)
 {
 	int ret;
-	struct transfer_context *context;
 	struct urb *usb_request;
 	int result;
 
-	if (interface_to_usbdev(intf)->descriptor.idVendor == USB_ID_VENDOR &&
-	    interface_to_usbdev(intf)->descriptor.idProduct == USB_ID_PRODUCT)
-	{
-		try_module_get(THIS_MODULE);
+	if (static_context)
+		return -ENODEV;
 
-		if (ret = device_create_file(&intf->dev, &dev_attr_probe_temp), ret)
-			printk(KERN_ERR "device_create_file(): %d\n", ret);
+	if (interface_to_usbdev(intf)->descriptor.idVendor != PCBOVEN_USB_ID_VENDOR ||
+	    interface_to_usbdev(intf)->descriptor.idProduct != PCBOVEN_USB_ID_PRODUCT)
+	return -ENODEV;
 
-		if (ret = device_create_file(&intf->dev, &dev_attr_internal_temp), ret)
-			printk(KERN_ERR "device_create_file(): %d\n", ret);
+	try_module_get(THIS_MODULE);
 
-		if (ret = device_create_file(&intf->dev, &dev_attr_fault_short_gnd), ret)
-			printk(KERN_ERR "device_create_file(): %d\n", ret);
+	if (ret = device_create_file(&intf->dev, &dev_attr_probe_temp), ret)
+		printk(KERN_ERR "device_create_file(): %d\n", ret);
 
-		if (ret = device_create_file(&intf->dev, &dev_attr_fault_short_vcc), ret)
-			printk(KERN_ERR "device_create_file(): %d\n", ret);
+	if (ret = device_create_file(&intf->dev, &dev_attr_internal_temp), ret)
+		printk(KERN_ERR "device_create_file(): %d\n", ret);
 
-		if (ret = device_create_file(&intf->dev, &dev_attr_fault_open_circuit), ret)
-			printk(KERN_ERR "device_create_file(): %d\n", ret);
+	if (ret = device_create_file(&intf->dev, &dev_attr_fault_short_gnd), ret)
+		printk(KERN_ERR "device_create_file(): %d\n", ret);
 
-		if (ret = device_create_file(&intf->dev, &dev_attr_filament_top_on), ret)
-			printk(KERN_ERR "device_create_file(): %d\n", ret);
+	if (ret = device_create_file(&intf->dev, &dev_attr_fault_short_vcc), ret)
+		printk(KERN_ERR "device_create_file(): %d\n", ret);
 
-		if (ret = device_create_file(&intf->dev, &dev_attr_filament_bottom_on), ret)
-			printk(KERN_ERR "device_create_file(): %d\n", ret);
+	if (ret = device_create_file(&intf->dev, &dev_attr_fault_open_circuit), ret)
+		printk(KERN_ERR "device_create_file(): %d\n", ret);
 
-		if (ret = device_create_file(&intf->dev, &dev_attr_target_temp), ret)
-			printk(KERN_ERR "device_create_file(): %d\n", ret);
+	if (ret = device_create_file(&intf->dev, &dev_attr_filament_top_on), ret)
+		printk(KERN_ERR "device_create_file(): %d\n", ret);
 
-		context = kzalloc(sizeof(struct transfer_context), GFP_KERNEL);
-		if (context == NULL)
-			return -ENOMEM;
-		usb_set_intfdata(intf, context);
+	if (ret = device_create_file(&intf->dev, &dev_attr_filament_bottom_on), ret)
+		printk(KERN_ERR "device_create_file(): %d\n", ret);
 
-		usb_request = usb_alloc_urb(0, GFP_KERNEL);
+	if (ret = device_create_file(&intf->dev, &dev_attr_target_temp), ret)
+		printk(KERN_ERR "device_create_file(): %d\n", ret);
 
-		usb_fill_int_urb(usb_request,
-		                 interface_to_usbdev(intf),
-		                 usb_rcvintpipe(interface_to_usbdev(intf), IN_EP),
-		                 context->transfer_buffer,
-		                 IN_BUF_LEN,
-		                 &intr_callback,
-		                 context,
-		                 IN_INTERVAL);
-		result = usb_submit_urb(usb_request, GFP_KERNEL);
-		if (result) {
-			printk(KERN_ERR "Error registering urb (%d)", result);
-			return -EFAULT;
-		}
+	static_context = kzalloc(sizeof(struct driver_context), GFP_KERNEL);
+	if (static_context == NULL)
+		return -ENOMEM;
 
-		return 0;
+	usb_set_intfdata(intf, static_context);
+	static_context->usb_device = interface_to_usbdev(intf);
+
+	usb_request = usb_alloc_urb(0, GFP_KERNEL);
+
+	usb_fill_int_urb(usb_request,
+					 interface_to_usbdev(intf),
+					 usb_rcvintpipe(interface_to_usbdev(intf), IN_EP),
+					 static_context->transfer_buffer,
+					 IN_BUF_LEN,
+					 &intr_callback,
+					 static_context,
+					 IN_INTERVAL);
+	result = usb_submit_urb(usb_request, GFP_KERNEL);
+	if (result) {
+		printk(KERN_ERR "Error registering urb (%d)", result);
+		kfree(static_context);
+		return -EFAULT;
 	}
 
-	return -ENODEV;
+	return 0;
 }
 
 void usb_disconnect(struct usb_interface *intf)
@@ -237,7 +288,8 @@ void usb_disconnect(struct usb_interface *intf)
 	device_remove_file(&intf->dev, &dev_attr_filament_bottom_on);
 	device_remove_file(&intf->dev, &dev_attr_target_temp);
 
-	kfree(usb_get_intfdata(intf));
+	kfree(static_context);
+	static_context = NULL;
 
 	module_put(THIS_MODULE);
 }
@@ -245,7 +297,7 @@ void usb_disconnect(struct usb_interface *intf)
 void intr_callback(struct urb *urb)
 {
 	int result;
-	struct oven *oven = &((struct transfer_context *)urb->context)->oven;
+	struct oven *oven = &((struct driver_context *)urb->context)->oven;
 
 	if (urb->status == 0) {
 		if (urb->actual_length >= sizeof(struct oven_usb_frame)) {
@@ -328,27 +380,28 @@ void urb_complete(struct urb *urb)
 	usb_free_urb(urb);
 }
 
-int usb_ioctl(struct usb_interface *intf, unsigned int code, void *buf)
+long oven_ioctl(struct file *file, unsigned int code, unsigned long data)
 {
-	struct transfer_context *context = usb_get_intfdata(intf);
-	struct usb_device *usbdev = interface_to_usbdev(intf);
-	int temp = *((int *)buf);
+	if ((code != PCBOVEN_IS_CONNECTED) && (static_context == NULL))
+		return -ENODEV;
 
 	switch (code) {
-	case PCB_OVEN_SET_TEMPERATURE:
-		context->oven.target_temp = (int16_t)temp;
+	case PCBOVEN_IS_CONNECTED:
+		return (static_context != NULL);
+	case PCBOVEN_SET_TEMPERATURE:
+		static_context->oven.target_temp = (int16_t)data;
 		break;
-	case PCB_OVEN_ENABLE_FILAMENTS:
-		context->oven.enable_filaments = true;
+	case PCBOVEN_ENABLE_FILAMENTS:
+		static_context->oven.enable_filaments = true;
 		break;
-	case PCB_OVEN_DISABLE_FILAMENTS:
-		context->oven.enable_filaments = false;
+	case PCBOVEN_DISABLE_FILAMENTS:
+		static_context->oven.enable_filaments = false;
 		break;
 	default:
 		return -ENOTTY;
 	}
 
-	return write_settings(usbdev, context->oven.target_temp, context->oven.enable_filaments);
+	return write_settings(static_context->usb_device, static_context->oven.target_temp, static_context->oven.enable_filaments);
 }
 
 MODULE_LICENSE("GPL");

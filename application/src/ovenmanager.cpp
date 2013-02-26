@@ -2,47 +2,59 @@
 #include <sys/ioctl.h>
 #include <linux/usbdevice_fs.h>
 #include <errno.h>
+#include <QThread>
 #include "ovenmanager.h"
 #include "pcboven_usb.h"
+
+static OvenManager *_sigio_receiver;
 
 OvenManager::OvenManager(QObject *parent) : QObject(parent)
 {
 	_filamentsEnabled = false;
 	_targetTemperature = 0;
 	_connected = false;
-
-	_udevMonitor = new UdevMonitor(parent);
-
-	connect(_udevMonitor, &UdevMonitor::ovenProbed, this, &OvenManager::handleOvenProbed);
-	connect(_udevMonitor, &UdevMonitor::ovenRemoved, this, &OvenManager::handleOvenProbed);
 }
 
 OvenManager::~OvenManager()
 {
 	stop();
-	_udevMonitor->wait();
 }
 
 void OvenManager::start()
 {
-	_udevMonitor->start();
+	_ioctlFd = open("/dev/pcboven", O_RDWR, O_NONBLOCK | FASYNC);
+	if (_ioctlFd < 0) {
+		emit errorOccurred(errno);
+		return;
+	}
+
+	if (fcntl(_ioctlFd, F_SETOWN, getpid())) {
+		emit errorOccurred(errno);
+		return;
+	}
+	register_sigio_receiver(this);
+
+	int ret = ioctl(_ioctlFd, PCBOVEN_IS_CONNECTED);
+	if (ret < 0)
+		emit errorOccurred(ret);
+
+	if (ret) {
+		_connected = true;
+		emit connected();
+	}
 }
 
 void OvenManager::stop()
 {
-	_udevMonitor->terminate();
+	close(_ioctlFd);
 }
 
 void OvenManager::setFilamentsEnabled(bool enabled)
 {
 	if (enabled != _filamentsEnabled) {
-		struct usbdevfs_ioctl wrapper;
-		wrapper.ifno = 0; // TODO: Not sure if this is right
-		wrapper.ioctl_code = enabled ? PCB_OVEN_ENABLE_FILAMENTS :
-		                               PCB_OVEN_DISABLE_FILAMENTS;
-		wrapper.data = NULL;
-
-		if (ioctl(_ioctlFd, USBDEVFS_IOCTL, &wrapper))
+		int code = enabled ? PCBOVEN_ENABLE_FILAMENTS :
+		                     PCBOVEN_DISABLE_FILAMENTS;
+		if (ioctl(_ioctlFd, code))
 			emit errorOccurred(errno);
 		else
 			_filamentsEnabled = enabled;
@@ -52,31 +64,59 @@ void OvenManager::setFilamentsEnabled(bool enabled)
 void OvenManager::setTargetTemperature(int temperature)
 {
 	if (temperature != _targetTemperature) {
-		struct usbdevfs_ioctl wrapper;
-		wrapper.ifno = 0; // TODO: Not sure if this is right
-		wrapper.ioctl_code = PCB_OVEN_SET_TEMPERATURE;
-		wrapper.data = &temperature;
-
-		if (ioctl(_ioctlFd, USBDEVFS_IOCTL, &wrapper))
+		if (ioctl(_ioctlFd, PCBOVEN_SET_TEMPERATURE))
 			emit errorOccurred(errno);
 		else
 			_targetTemperature = temperature;
 	}
 }
 
-void OvenManager::handleOvenProbed()
+void OvenManager::sigio_handler(int sig)
 {
-	_ioctlFd = open("/dev/pcboven", O_RDWR, O_NONBLOCK);
-	if (_ioctlFd >= 0)
-		emit connected();
-	else
+	QTime timestamp = QTime::currentTime();
+	struct oven_state state;
+	int ret = -EFAULT;
+	(void)sig;
+
+	//ret = ioctl(_ioctlFd, PCBOVEN_GET_STATE, &state);
+	switch (ret) {
+	// Oven was disconnected
+	case -ENODEV:
+		_connected = false;
+		close(_ioctlFd);
+		emit disconnected();
+		break;
+
+	// ioctl syscall error
+	case -1:
 		emit errorOccurred(errno);
+		break;
+
+	// success
+	case 0:
+		emit readingsRead(state, timestamp);
+		break;
+
+	// driver error
+	default:
+		emit errorOccurred(ret);
+	}
+
 }
 
-void OvenManager::handleOvenRemoved()
+void OvenManager::top_sigio_handler(int sig)
 {
-	close(_ioctlFd);
+	if (_sigio_receiver)
+		_sigio_receiver->sigio_handler(sig);
+	signal(SIGIO, &OvenManager::top_sigio_handler);
+}
 
-	emit disconnected();
+void OvenManager::register_sigio_receiver(OvenManager *receiver)
+{
+	_sigio_receiver = receiver;
+	if (receiver)
+		signal(SIGIO, &OvenManager::top_sigio_handler);
+	else
+		signal(SIGIO, NULL);
 }
 

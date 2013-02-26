@@ -8,13 +8,11 @@ TEMPLATE = app
 SOURCES += src/main.cpp \
            src/controlpanel.cpp \
            src/ovenmanager.cpp \
-           src/udevmonitor.cpp \
            src/reflowprofile.cpp \
            src/reflowgraphwidget.cpp
 
 HEADERS += src/controlpanel.h \
            src/ovenmanager.h \
-           src/udevmonitor.h \
            src/reflowprofile.h \
            src/reflowgraphwidget.h
 
