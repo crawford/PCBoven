@@ -1,0 +1,37 @@
+{
+	"title": "Example Reflow Profile",
+	"waypoints": [
+		{
+			"timestamp": 10,
+			"temperature": 30
+		},
+		{
+			"timestamp": 60,
+			"temperature": 100
+		},
+		{
+			"timestamp": 120,
+			"temperature": 200
+		},
+		{
+			"timestamp": 130,
+			"temperature": 210
+		},
+		{
+			"timestamp": 150,
+			"temperature": 210
+		},
+		{
+			"timestamp": 180,
+			"temperature": 190
+		},
+		{
+			"timestamp": 240,
+			"temperature": 140
+		},
+		{
+			"timestamp": 400,
+			"temperature": 50
+		}
+	]
+}
