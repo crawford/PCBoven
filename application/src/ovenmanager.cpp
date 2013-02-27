@@ -11,7 +11,6 @@ OvenManager::OvenManager(QObject *parent) : QObject(parent)
 {
 	_filamentsEnabled = false;
 	_targetTemperature = 0;
-	_connected = false;
 }
 
 OvenManager::~OvenManager()
@@ -43,10 +42,8 @@ void OvenManager::start()
 	if (ret < 0)
 		emit errorOccurred(ret);
 
-	if (ret) {
-		_connected = true;
+	if (ret)
 		emit connected();
-	}
 }
 
 void OvenManager::stop()
@@ -69,7 +66,7 @@ void OvenManager::setFilamentsEnabled(bool enabled)
 void OvenManager::setTargetTemperature(int temperature)
 {
 	if (temperature != _targetTemperature) {
-		if (ioctl(_ioctlFd, PCBOVEN_SET_TEMPERATURE))
+		if (ioctl(_ioctlFd, PCBOVEN_SET_TEMPERATURE, temperature))
 			emit errorOccurred(errno);
 		else
 			_targetTemperature = temperature;
@@ -87,7 +84,6 @@ void OvenManager::sigio_handler(int sig)
 	switch (ret) {
 	// Oven was disconnected
 	case -ENODEV:
-		_connected = false;
 		close(_ioctlFd);
 		emit disconnected();
 		break;

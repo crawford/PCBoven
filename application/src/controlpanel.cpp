@@ -7,7 +7,6 @@
 
 ControlPanel::ControlPanel(QWidget *parent) : QMainWindow(parent), ui(new Ui::ControlPanel)
 {
-	_reflowing = false;
 	_ovenManager = new OvenManager(this);
 	connect(_ovenManager, &OvenManager::errorOccurred, this, &ControlPanel::handleError);
 	connect(_ovenManager, &OvenManager::connected, this, &ControlPanel::ovenConnected);
@@ -45,34 +44,37 @@ ControlPanel::~ControlPanel()
 
 void ControlPanel::on_actionStart_Reflow_triggered()
 {
-	_reflowing = true;
 	_reflowStartTime.start();
 	ui->reflowGraph->clearGraph();
 	ui->actionStart_Reflow->setEnabled(false);
 	ui->actionStop_Reflow->setEnabled(true);
 	_ovenManager->setFilamentsEnabled(true);
 
+
 	connect(_ovenManager, &OvenManager::readingsRead, this, &ControlPanel::logReadings);
 
 	_nextTarget = _profile.getProfile().constBegin();
-
 	checkProfile();
+
+	_ovenManager->setTargetTemperature(_nextTarget.value());
+	ui->statusBar->showMessage(QString("Target temperature: %1C").arg(_nextTarget.value()));
+
 	_reflowTimer->start();
 }
 
 void ControlPanel::on_actionStop_Reflow_triggered()
 {
-	_reflowing = false;
 	_reflowTimer->stop();
 	ui->actionStart_Reflow->setEnabled(true);
 	ui->actionStop_Reflow->setEnabled(false);
 	_ovenManager->setFilamentsEnabled(false);
 	disconnect(_ovenManager, &OvenManager::readingsRead, this, &ControlPanel::logReadings);
+
+	ui->statusBar->showMessage("Reflow stopped");
 }
 
 void ControlPanel::ovenConnected()
 {
-	_reflowing = false;
 	ui->actionStart_Reflow->setEnabled(true);
 	ui->actionStop_Reflow->setEnabled(false);
 	connectionStatus->setText("Connected");
@@ -109,11 +111,13 @@ void ControlPanel::checkProfile()
 	if (adjustedTime >= _nextTarget.key()) {
 		if (_nextTarget != _profile.getProfile().constEnd())
 			_nextTarget++;
-		else
-			on_actionStop_Reflow_triggered();
 
-		_ovenManager->setTargetTemperature(_nextTarget.value());
-		ui->statusBar->showMessage(QString("Target temperature: %1C").arg(_nextTarget.value()));
+		if (_nextTarget == _profile.getProfile().constEnd()) {
+			on_actionStop_Reflow_triggered();
+		} else {
+			_ovenManager->setTargetTemperature(_nextTarget.value());
+			ui->statusBar->showMessage(QString("Target temperature: %1C").arg(_nextTarget.value()));
+		}
 	}
 }
 

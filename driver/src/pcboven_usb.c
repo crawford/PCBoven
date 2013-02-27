@@ -403,7 +403,7 @@ long oven_ioctl(struct file *file, unsigned int code, unsigned long data)
 
 	switch (code) {
 	case PCBOVEN_SET_TEMPERATURE:
-		context->oven.target_temp = (int16_t)data;
+		context->oven.target_temp = data << 2;
 		break;
 	case PCBOVEN_ENABLE_FILAMENTS:
 		context->oven.enable_filaments = true;
