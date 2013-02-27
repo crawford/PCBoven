@@ -54,7 +54,9 @@ void ControlPanel::on_actionStart_Reflow_triggered()
 
 	connect(_ovenManager, &OvenManager::readingsRead, this, &ControlPanel::logReadings);
 
-	reflowStatus->setText(QTime(0, 0).toString());
+	_nextTarget = _profile.getProfile().constBegin();
+
+	checkProfile();
 	_reflowTimer->start();
 }
 
@@ -101,7 +103,18 @@ void ControlPanel::handleError(int error)
 
 void ControlPanel::checkProfile()
 {
-	reflowStatus->setText(QTime(0, 0).addMSecs(_reflowStartTime.msecsTo(QTime::currentTime())).toString());
+	QTime adjustedTime = QTime(0, 0).addMSecs(_reflowStartTime.msecsTo(QTime::currentTime()));
+	reflowStatus->setText(adjustedTime.toString());
+
+	if (adjustedTime >= _nextTarget.key()) {
+		if (_nextTarget != _profile.getProfile().constEnd())
+			_nextTarget++;
+		else
+			on_actionStop_Reflow_triggered();
+
+		_ovenManager->setTargetTemperature(_nextTarget.value());
+		ui->statusBar->showMessage(QString("Target temperature: %1C").arg(_nextTarget.value()));
+	}
 }
 
 void ControlPanel::logReadings(struct oven_state state, QTime timestamp)

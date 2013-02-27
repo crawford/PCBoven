@@ -265,10 +265,13 @@ int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table)
 					 IN_INTERVAL);
 	result = usb_submit_urb(usb_request, GFP_KERNEL);
 	if (result) {
-		printk(KERN_ERR "Error registering urb (%d)", result);
-		kfree(static_context);
+		printk(KERN_ERR "Error registering urb (%d)\n", result);
+		static_context->usb_device = NULL;
 		return -EFAULT;
 	}
+
+	if (static_context->async_queue)
+		kill_fasync(&static_context->async_queue, SIGIO, POLL_IN);
 
 	return 0;
 }

@@ -3,10 +3,6 @@
 #include <QJsonArray>
 #include "reflowprofile.h"
 
-ReflowProfile::ReflowProfile()
-{
-}
-
 ReflowProfile ReflowProfile::parseFromJson(QByteArray json)
 {
 	QMap<QTime, int> profile;
@@ -25,6 +21,10 @@ ReflowProfile ReflowProfile::parseFromJson(QByteArray json)
 	}
 
 	return ReflowProfile(title, profile);
+}
+
+ReflowProfile::ReflowProfile()
+{
 }
 
 ReflowProfile::ReflowProfile(QString title, QMap<QTime, int> profile)

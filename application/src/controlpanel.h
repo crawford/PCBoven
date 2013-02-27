@@ -20,7 +20,7 @@ class ControlPanel : public QMainWindow
 		explicit ControlPanel(QWidget *parent = 0);
 		~ControlPanel();
 
-		static const int REFLOW_CHECK_PERIOD_MS = 1000;
+		static const int REFLOW_CHECK_PERIOD_MS = 750;
 
 
 	private:
@@ -32,6 +32,7 @@ class ControlPanel : public QMainWindow
 		QTime _reflowStartTime;
 		QTimer *_reflowTimer;
 		bool _reflowing;
+		QMap<QTime, int>::const_iterator _nextTarget;
 
 	private slots:
 		void on_actionStart_Reflow_triggered();
