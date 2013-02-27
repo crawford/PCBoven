@@ -4,7 +4,6 @@
 #include <errno.h>
 #include <QThread>
 #include "ovenmanager.h"
-#include "pcboven_usb.h"
 
 static OvenManager *_sigio_receiver;
 
@@ -28,11 +27,17 @@ void OvenManager::start()
 		return;
 	}
 
+	register_sigio_receiver(this);
+
 	if (fcntl(_ioctlFd, F_SETOWN, getpid())) {
 		emit errorOccurred(errno);
 		return;
 	}
-	register_sigio_receiver(this);
+
+	if (fcntl(_ioctlFd, F_SETFL, fcntl(STDIN_FILENO, F_GETFL) | FASYNC)) {
+		emit errorOccurred(errno);
+		return;
+	}
 
 	int ret = ioctl(_ioctlFd, PCBOVEN_IS_CONNECTED);
 	if (ret < 0)
@@ -75,10 +80,10 @@ void OvenManager::sigio_handler(int sig)
 {
 	QTime timestamp = QTime::currentTime();
 	struct oven_state state;
-	int ret = -EFAULT;
+	int ret;
 	(void)sig;
 
-	//ret = ioctl(_ioctlFd, PCBOVEN_GET_STATE, &state);
+	ret = ioctl(_ioctlFd, PCBOVEN_GET_STATE, &state);
 	switch (ret) {
 	// Oven was disconnected
 	case -ENODEV:

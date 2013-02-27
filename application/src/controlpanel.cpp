@@ -19,7 +19,7 @@ ControlPanel::ControlPanel(QWidget *parent) : QMainWindow(parent), ui(new Ui::Co
 
 	ui->setupUi(this);
 	connectionStatus = new QLabel("Waiting for connection");
-	reflowStatus = new QLabel("");
+	reflowStatus = new QLabel(QTime(0, 0).toString());
 	ui->statusBar->addPermanentWidget(connectionStatus);
 	ui->statusBar->addPermanentWidget(reflowStatus);
 
@@ -53,20 +53,9 @@ void ControlPanel::on_actionStart_Reflow_triggered()
 	_ovenManager->setFilamentsEnabled(true);
 
 	connect(_ovenManager, &OvenManager::readingsRead, this, &ControlPanel::logReadings);
-	_reflowTimer->start();
 
-	QPair<QTime, int> temps[] = { QPair<QTime, int>(QTime(0, 0, 0), 5),
-								  QPair<QTime, int>(QTime(0, 0, 2), 10),
-								  QPair<QTime, int>(QTime(0, 0, 3), 20),
-								  QPair<QTime, int>(QTime(0, 0, 5), 25),
-								  QPair<QTime, int>(QTime(0, 0, 7), 28),
-								  QPair<QTime, int>(QTime(0, 0, 10), 30),
-								  QPair<QTime, int>(QTime(0, 0, 15), 31),
-								  QPair<QTime, int>(QTime(0, 0, 20), 23),
-								  QPair<QTime, int>(QTime(0, 0, 25), 26),
-								  QPair<QTime, int>(QTime(0, 0, 30), 17)};
-	for (unsigned int i = 0; i < sizeof(temps)/sizeof(*temps); i++)
-		ui->reflowGraph->addTemperature(temps[i].first, temps[i].second);
+	reflowStatus->setText(QTime(0, 0).toString());
+	_reflowTimer->start();
 }
 
 void ControlPanel::on_actionStop_Reflow_triggered()
@@ -117,6 +106,6 @@ void ControlPanel::checkProfile()
 
 void ControlPanel::logReadings(struct oven_state state, QTime timestamp)
 {
-
+	ui->reflowGraph->addTemperature(QTime(0, 0).addMSecs(_reflowStartTime.msecsTo(timestamp)), state.probe_temp);
 }
 

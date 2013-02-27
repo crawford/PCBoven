@@ -18,18 +18,9 @@ int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table);
 void usb_disconnect(struct usb_interface *intf);
 void urb_complete(struct urb *urb);
 long oven_ioctl(struct file *file, unsigned int code, unsigned long data);
-
-struct oven {
-	int16_t probe_temp;
-	int16_t internal_temp;
-	int16_t target_temp;
-	bool enable_filaments;
-	bool fault_short_vcc;
-	bool fault_short_gnd;
-	bool fault_open_circuit;
-	bool filament_top_on;
-	bool filament_bottom_on;
-};
+int oven_fopen(struct inode *inode, struct file *file);
+int oven_fclose(struct inode *inode, struct file *file);
+int oven_fasync(int fd, struct file *file, int mode);
 
 struct __attribute__ ((__packed__)) oven_usb_frame {
 	int16_t probe;
@@ -42,9 +33,9 @@ struct __attribute__ ((__packed__)) oven_usb_frame {
 };
 
 struct driver_context {
-	struct oven oven;
+	struct oven_state oven;
 	struct usb_device *usb_device;
-	//struct *fasync_struct;
+	struct fasync_struct *async_queue;
 	uint8_t transfer_buffer[IN_BUF_LEN];
 };
 
@@ -59,14 +50,15 @@ static struct file_operations oven_fops = {
 	.aio_write         = NULL,
 	.readdir           = NULL,
 	.poll              = NULL,
-	.unlocked_ioctl    = oven_ioctl,
-	.compat_ioctl      = oven_ioctl,
+	.unlocked_ioctl    = &oven_ioctl,
+	.compat_ioctl      = &oven_ioctl,
 	.mmap              = NULL,
-	.open              = NULL,
+	.open              = &oven_fopen,
 	.flush             = NULL,
 	.release           = NULL,
 	.fsync             = NULL,
 	.aio_fsync         = NULL,
+	.fasync            = &oven_fasync,
 	.lock              = NULL,
 	.sendpage          = NULL,
 	.get_unmapped_area = NULL,
@@ -187,17 +179,23 @@ DEVICE_ATTR(target_temp, S_IRUSR | S_IWUSR, target_temp_show, target_temp_store)
 
 int __init init_module()
 {
-	int retval = usb_register(&oven_usb_driver);
+	int retval;
+
+	static_context = kzalloc(sizeof(struct driver_context), GFP_KERNEL);
+	if (static_context == NULL)
+		return -ENOMEM;
+
+	retval = usb_register(&oven_usb_driver);
 	if (retval) {
 		err("usb_register(): error %d\n", retval);
-		return -1;
+		return retval;
 	}
 
 	retval = misc_register(&oven_misc_device);
 	if (retval) {
 		err("misc_register(): error %d\n", retval);
 		usb_deregister(&oven_usb_driver);
-		return -1;
+		return retval;
 	}
 
 	printk("REGISTERED DRIVER\n");
@@ -209,6 +207,8 @@ void __exit cleanup_module()
 	printk("DESTROYING DRIVER\n");
 	usb_deregister(&oven_usb_driver);
 	misc_deregister(&oven_misc_device);
+
+	kfree(static_context);
 }
 
 int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table)
@@ -217,7 +217,7 @@ int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table)
 	struct urb *usb_request;
 	int result;
 
-	if (static_context)
+	if (static_context->usb_device)
 		return -ENODEV;
 
 	if (interface_to_usbdev(intf)->descriptor.idVendor != PCBOVEN_USB_ID_VENDOR ||
@@ -249,10 +249,6 @@ int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table)
 
 	if (ret = device_create_file(&intf->dev, &dev_attr_target_temp), ret)
 		printk(KERN_ERR "device_create_file(): %d\n", ret);
-
-	static_context = kzalloc(sizeof(struct driver_context), GFP_KERNEL);
-	if (static_context == NULL)
-		return -ENOMEM;
 
 	usb_set_intfdata(intf, static_context);
 	static_context->usb_device = interface_to_usbdev(intf);
@@ -288,8 +284,7 @@ void usb_disconnect(struct usb_interface *intf)
 	device_remove_file(&intf->dev, &dev_attr_filament_bottom_on);
 	device_remove_file(&intf->dev, &dev_attr_target_temp);
 
-	kfree(static_context);
-	static_context = NULL;
+	static_context->usb_device = NULL;
 
 	module_put(THIS_MODULE);
 }
@@ -297,7 +292,8 @@ void usb_disconnect(struct usb_interface *intf)
 void intr_callback(struct urb *urb)
 {
 	int result;
-	struct oven *oven = &((struct driver_context *)urb->context)->oven;
+	struct driver_context *context = (struct driver_context *)urb->context;
+	struct oven_state *oven = &context->oven;
 
 	if (urb->status == 0) {
 		if (urb->actual_length >= sizeof(struct oven_usb_frame)) {
@@ -314,14 +310,17 @@ void intr_callback(struct urb *urb)
 			oven->fault_open_circuit = !!reading->open_circuit;
 			oven->filament_top_on    = !!reading->top_on;
 			oven->filament_bottom_on = !!reading->bottom_on;
+
+			if (context->async_queue)
+				kill_fasync(&context->async_queue, SIGIO, POLL_IN);
 		}
 	} else {
-		printk(KERN_ERR "Urb failed with: %d", urb->status);
+		printk(KERN_ERR "Urb failed with: %d\n", urb->status);
 	}
 
 	result = usb_submit_urb(urb, GFP_KERNEL);
 	if (result)
-		printk(KERN_ERR "Error reregistering urb (%d)", result);
+		printk(KERN_ERR "Error reregistering urb (%d)\n", result);
 }
 
 int write_settings(struct usb_device *usbdev, int16_t temp, bool filaments)
@@ -375,33 +374,55 @@ error:
 
 void urb_complete(struct urb *urb)
 {
-	printk(KERN_ERR "Urb status: %d", urb->status);
+	printk(KERN_ERR "Urb status: %d\n", urb->status);
 	kfree(urb->transfer_buffer);
 	usb_free_urb(urb);
 }
 
+int oven_fasync(int fd, struct file *file, int mode)
+{
+	struct driver_context *context = file->private_data;
+	if (context == NULL)
+		return -ENODEV;
+
+	return fasync_helper(fd, file, mode, &context->async_queue);
+}
+
 long oven_ioctl(struct file *file, unsigned int code, unsigned long data)
 {
-	if ((code != PCBOVEN_IS_CONNECTED) && (static_context == NULL))
+	struct driver_context *context = file->private_data;
+
+	if (code == PCBOVEN_IS_CONNECTED)
+		return (context->usb_device != NULL);
+
+	if (context == NULL)
 		return -ENODEV;
 
 	switch (code) {
-	case PCBOVEN_IS_CONNECTED:
-		return (static_context != NULL);
 	case PCBOVEN_SET_TEMPERATURE:
-		static_context->oven.target_temp = (int16_t)data;
+		context->oven.target_temp = (int16_t)data;
 		break;
 	case PCBOVEN_ENABLE_FILAMENTS:
-		static_context->oven.enable_filaments = true;
+		context->oven.enable_filaments = true;
 		break;
 	case PCBOVEN_DISABLE_FILAMENTS:
-		static_context->oven.enable_filaments = false;
+		context->oven.enable_filaments = false;
 		break;
+	case PCBOVEN_GET_STATE:
+		if (copy_to_user((struct oven_state *)data, &context->oven, sizeof(context->oven)))
+			return -EFAULT;
+		return 0;
 	default:
 		return -ENOTTY;
 	}
 
-	return write_settings(static_context->usb_device, static_context->oven.target_temp, static_context->oven.enable_filaments);
+	return write_settings(context->usb_device, context->oven.target_temp, context->oven.enable_filaments);
+}
+
+int oven_fopen(struct inode *inode, struct file *file)
+{
+	file->private_data = static_context;
+	return 0;
 }
 
 MODULE_LICENSE("GPL");

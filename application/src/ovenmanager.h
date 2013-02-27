@@ -3,16 +3,7 @@
 
 #include <signal.h>
 #include <QTime>
-
-struct oven_state {
-	int probeTemperature;
-	int internalTemperature;
-	bool faultOpenCircuit;
-	bool faultShortToGnd;
-	bool faultShortToVcc;
-	bool filamentTopOn;
-	bool filamentBottomOn;
-};
+#include "pcboven_usb.h"
 
 class OvenManager : public QObject
 {
