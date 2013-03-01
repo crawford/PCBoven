@@ -11,6 +11,7 @@ OvenManager::OvenManager(QObject *parent) : QObject(parent)
 {
 	_filamentsEnabled = false;
 	_targetTemperature = 0;
+	_connected = false;
 }
 
 OvenManager::~OvenManager()
@@ -20,7 +21,7 @@ OvenManager::~OvenManager()
 
 void OvenManager::start()
 {
-	_ioctlFd = open("/dev/pcboven", O_RDWR, O_NONBLOCK | FASYNC);
+	_ioctlFd = open("/dev/pcboven", O_RDWR, O_NONBLOCK);
 	if (_ioctlFd < 0) {
 		emit errorOccurred(errno);
 		return;
@@ -33,17 +34,18 @@ void OvenManager::start()
 		return;
 	}
 
-	if (fcntl(_ioctlFd, F_SETFL, fcntl(STDIN_FILENO, F_GETFL) | FASYNC)) {
+	if (fcntl(_ioctlFd, F_SETFL, (fcntl(_ioctlFd, F_GETFL) | FASYNC))) {
 		emit errorOccurred(errno);
 		return;
 	}
 
 	int ret = ioctl(_ioctlFd, PCBOVEN_IS_CONNECTED);
-	if (ret < 0)
+	if (ret < 0) {
 		emit errorOccurred(ret);
-
-	if (ret)
+	} else if (ret) {
+		_connected = true;
 		emit connected();
+	}
 }
 
 void OvenManager::stop()
@@ -80,29 +82,29 @@ void OvenManager::sigio_handler(int sig)
 	int ret;
 	(void)sig;
 
-	ret = ioctl(_ioctlFd, PCBOVEN_GET_STATE, &state);
-	switch (ret) {
-	// Oven was disconnected
-	case -ENODEV:
-		close(_ioctlFd);
-		emit disconnected();
-		break;
-
-	// ioctl syscall error
-	case -1:
-		emit errorOccurred(errno);
-		break;
-
-	// success
-	case 0:
-		emit readingsRead(state, timestamp);
-		break;
-
-	// driver error
-	default:
-		emit errorOccurred(ret);
+	if (_connected) {
+		ret = ioctl(_ioctlFd, PCBOVEN_GET_STATE, &state);
+		if (ret == 0) {
+			emit readingsRead(state, timestamp);
+		} else if (ret == -1) {
+			if (errno == ENODEV) {
+				_connected = false;
+				emit disconnected();
+			} else {
+				emit errorOccurred(errno);
+			}
+		} else {
+			emit errorOccurred(ret);
+		}
+	} else {
+		ret = ioctl(_ioctlFd, PCBOVEN_IS_CONNECTED, &state);
+		if (ret < 0) {
+			emit errorOccurred(ret);
+		} else if (ret) {
+			_connected = true;
+			emit connected();
+		}
 	}
-
 }
 
 void OvenManager::top_sigio_handler(int sig)

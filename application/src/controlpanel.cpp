@@ -82,6 +82,7 @@ void ControlPanel::ovenConnected()
 
 void ControlPanel::ovenDisconnected()
 {
+	on_actionStop_Reflow_triggered();
 	ui->actionStart_Reflow->setEnabled(false);
 	ui->actionStop_Reflow->setEnabled(false);
 	connectionStatus->setText("Disconnected");

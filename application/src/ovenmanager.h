@@ -34,6 +34,7 @@ class OvenManager : public QObject
 
 		int _targetTemperature;
 		bool _filamentsEnabled;
+		bool _connected;
 		int _ioctlFd;
 };
 
