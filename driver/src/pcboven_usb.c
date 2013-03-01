@@ -12,6 +12,8 @@
 #define IN_EP       0x01
 #define OUT_EP      0x02
 
+#define to_misc_device(d) container_of(d, struct miscdevice, this_device)
+
 void intr_callback(struct urb *urb);
 int write_settings(struct usb_device *usbdev, int16_t temp, bool filaments);
 int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table);
@@ -89,6 +91,8 @@ static struct usb_driver oven_usb_driver = {
 	.id_table = id_table,
 	.disconnect = &usb_disconnect
 };
+
+static struct usb_device DUMMY_USB_DEVICE;
 
 ssize_t probe_temp_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -177,6 +181,34 @@ ssize_t target_temp_store(struct device *dev, struct device_attribute *attr, con
 
 DEVICE_ATTR(target_temp, S_IRUSR | S_IWUSR, target_temp_show, target_temp_store);
 
+ssize_t enable_dummy_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct miscdevice
+	return scnprintf(buf, PAGE_SIZE, "%d", (static_context->usb_device == &DUMMY_USB_DEVICE));
+}
+
+ssize_t enable_dummy_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (sscanf(buf, "%d", &val) != 1)
+		return -EINVAL;
+
+	if (val && !static_context->usb_device)
+		static_context->usb_device = &DUMMY_USB_DEVICE;
+	else if (!val && (static_context->usb_device == &DUMMY_USB_DEVICE))
+		static_context->usb_device = NULL;
+	else
+		return count;
+
+	if (static_context->async_queue)
+		kill_fasync(&static_context->async_queue, SIGIO, POLL_IN);
+
+	return count;
+}
+
+DEVICE_ATTR(enable_dummy, S_IRUSR | S_IWUSR, enable_dummy_show, enable_dummy_store);
+
 int __init init_module()
 {
 	int retval;
@@ -198,15 +230,18 @@ int __init init_module()
 		return retval;
 	}
 
-	printk("REGISTERED DRIVER\n");
+	if (retval = device_create_file(oven_misc_device.this_device, &dev_attr_enable_dummy), retval)
+		printk(KERN_ERR "device_create_file(): %d\n", retval);
+
 	return 0;
 }
 
 void __exit cleanup_module()
 {
-	printk("DESTROYING DRIVER\n");
 	usb_deregister(&oven_usb_driver);
 	misc_deregister(&oven_misc_device);
+
+	device_remove_file(oven_misc_device.this_device, &dev_attr_enable_dummy);
 
 	kfree(static_context);
 }
@@ -278,6 +313,8 @@ int usb_probe(struct usb_interface *intf, const struct usb_device_id *id_table)
 
 void usb_disconnect(struct usb_interface *intf)
 {
+	struct driver_context *context = usb_get_intfdata(intf);
+
 	device_remove_file(&intf->dev, &dev_attr_probe_temp);
 	device_remove_file(&intf->dev, &dev_attr_internal_temp);
 	device_remove_file(&intf->dev, &dev_attr_fault_short_gnd);
@@ -287,7 +324,10 @@ void usb_disconnect(struct usb_interface *intf)
 	device_remove_file(&intf->dev, &dev_attr_filament_bottom_on);
 	device_remove_file(&intf->dev, &dev_attr_target_temp);
 
-	static_context->usb_device = NULL;
+	context->usb_device = NULL;
+
+	if (context->async_queue)
+		kill_fasync(&context->async_queue, SIGIO, POLL_IN);
 
 	module_put(THIS_MODULE);
 }
@@ -398,7 +438,7 @@ long oven_ioctl(struct file *file, unsigned int code, unsigned long data)
 	if (code == PCBOVEN_IS_CONNECTED)
 		return (context->usb_device != NULL);
 
-	if (context == NULL)
+	if (context->usb_device == NULL)
 		return -ENODEV;
 
 	switch (code) {
@@ -418,6 +458,9 @@ long oven_ioctl(struct file *file, unsigned int code, unsigned long data)
 	default:
 		return -ENOTTY;
 	}
+
+	if (context->usb_device == &DUMMY_USB_DEVICE)
+		return 0;
 
 	return write_settings(context->usb_device, context->oven.target_temp, context->oven.enable_filaments);
 }
