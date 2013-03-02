@@ -21,7 +21,7 @@ class ControlPanel : public QMainWindow
 		~ControlPanel();
 
 		static const int REFLOW_CHECK_PERIOD_MS = 500;
-
+		static const int REFLOW_STEP_PERIOD_MS = 1000;
 
 	private:
 		Ui::ControlPanel *ui;

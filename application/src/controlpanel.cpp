@@ -33,6 +33,7 @@ ControlPanel::ControlPanel(QWidget *parent) : QMainWindow(parent), ui(new Ui::Co
 		          << "'"
 		          << std::endl;
 	}
+	_profile.interpolate(REFLOW_STEP_PERIOD_MS);
 
 	_ovenManager->start();
 }

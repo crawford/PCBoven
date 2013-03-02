@@ -33,6 +33,21 @@ ReflowProfile::ReflowProfile(QString title, QMap<QTime, int> profile)
 	_profile = profile;
 }
 
+void ReflowProfile::interpolate(int granularity_ms)
+{
+	QMap<QTime, int>::const_iterator thisStep;
+	QMap<QTime, int>::const_iterator nextStep;
+	QMap<QTime, int> newSteps;
+
+	for (thisStep = _profile.constBegin(), nextStep = thisStep + 1; nextStep != _profile.constEnd(); thisStep++, nextStep++) {
+		double tempStep = (double)(nextStep.value() - thisStep.value()) / thisStep.key().msecsTo(nextStep.key());
+		for (int t = granularity_ms; t < thisStep.key().msecsTo(nextStep.key()); t += granularity_ms)
+			newSteps.insert(thisStep.key().addMSecs(t), thisStep.value() + tempStep*t);
+	}
+
+	_profile.unite(newSteps);
+}
+
 QString ReflowProfile::getTitle()
 {
 	return _title;

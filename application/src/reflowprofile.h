@@ -12,6 +12,7 @@ class ReflowProfile
 
 		ReflowProfile();
 		ReflowProfile(QString title, QMap<QTime, int> profile);
+		void interpolate(int granularity_ms);
 		QString getTitle();
 		QMap<QTime, int> getProfile();
 
