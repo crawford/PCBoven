@@ -183,7 +183,6 @@ DEVICE_ATTR(target_temp, S_IRUSR | S_IWUSR, target_temp_show, target_temp_store)
 
 ssize_t enable_dummy_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	struct miscdevice
 	return scnprintf(buf, PAGE_SIZE, "%d", (static_context->usb_device == &DUMMY_USB_DEVICE));
 }
 
