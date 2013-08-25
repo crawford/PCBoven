@@ -89,20 +89,10 @@ void ControlPanel::ovenDisconnected()
 	connectionStatus->setText("Disconnected");
 }
 
-void ControlPanel::handleError(int error)
+void ControlPanel::handleError(QString error)
 {
 	ui->statusBar->showMessage(QString("An error occured (%1)").arg(error));
-	switch (error) {
-	case ENOENT:
-		QMessageBox::critical(this, "Failed to connect to driver", "Could not find the pcboven device. Make sure that the driver is installed.");
-		break;
-	case EACCES:
-		QMessageBox::critical(this, "Failed to connect to driver", "Could not connect to the pcboven device. For now, run this as root. TODO ALEX");
-		break;
-	default:
-		QMessageBox::critical(this, "Well fuck me", QString().setNum(error));
-		break;
-	}
+	QMessageBox::critical(this, "Failed to connect to oven", error);
 }
 
 void ControlPanel::checkProfile()

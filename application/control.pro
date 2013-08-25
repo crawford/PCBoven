@@ -20,6 +20,8 @@ FORMS   += ui/controlpanel.ui
 
 INCLUDEPATH = ../driver/src
 
+LIBS += -lusb-1.0
+
 DESTDIR     = build
 OBJECTS_DIR = build
 MOC_DIR     = build

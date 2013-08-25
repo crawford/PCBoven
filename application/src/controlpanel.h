@@ -39,7 +39,7 @@ class ControlPanel : public QMainWindow
 		void ovenConnected();
 		void ovenDisconnected();
 		void logReadings(struct oven_state state, QTime timestamp);
-		void handleError(int error);
+		void handleError(QString error);
 		void checkProfile();
 };
 
