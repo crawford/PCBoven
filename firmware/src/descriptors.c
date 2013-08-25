@@ -57,7 +57,7 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor = {
 		.EndpointAddress   = (ENDPOINT_DIR_IN | IN_EPNUM),
 		.Attributes        = (EP_TYPE_INTERRUPT | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
 		.EndpointSize      = IN_EPSIZE,
-		.PollingIntervalMS = 1
+		.PollingIntervalMS = 5
 	},
 
 	.DataOutEndpoint = {
@@ -65,7 +65,7 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor = {
 		.EndpointAddress   = (ENDPOINT_DIR_OUT | OUT_EPNUM),
 		.Attributes        = (EP_TYPE_BULK | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
 		.EndpointSize      = OUT_EPSIZE,
-		.PollingIntervalMS = 0
+		.PollingIntervalMS = 5
 	}
 };
 
@@ -139,8 +139,8 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue, const uint8_t wIndex,
 
 /** Event handler for the library USB Configuration Changed event. */
 void EVENT_USB_Device_ConfigurationChanged() {
-	Endpoint_ConfigureEndpoint(IN_EPNUM, EP_TYPE_INTERRUPT, ENDPOINT_DIR_IN, IN_EPSIZE, ENDPOINT_BANK_SINGLE);
-	Endpoint_ConfigureEndpoint(OUT_EPNUM, EP_TYPE_BULK, ENDPOINT_DIR_OUT, OUT_EPSIZE, ENDPOINT_BANK_SINGLE);
+	Endpoint_ConfigureEndpoint(IN_EPNUM, EP_TYPE_INTERRUPT, IN_EPSIZE, 1);
+	Endpoint_ConfigureEndpoint(OUT_EPNUM, EP_TYPE_BULK, OUT_EPSIZE, 1);
 }
 
 /** Event handler for the library USB Control Request reception event. */
