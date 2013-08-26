@@ -6,9 +6,7 @@
 
 
 #define IN_EPNUM     1
-#define IN_EPSIZE    64
-#define OUT_EPNUM    2
-#define OUT_EPSIZE   64
+#define IN_EPSIZE    16
 
 /** Type define for the device configuration descriptor structure. This must be defined in the
  *  application code, as the configuration descriptor contains several sub-descriptors which
@@ -20,7 +18,6 @@ typedef struct {
 	USB_Descriptor_Configuration_Header_t Config;
 	USB_Descriptor_Interface_t            Interface;
 	USB_Descriptor_Endpoint_t             DataInEndpoint;
-	USB_Descriptor_Endpoint_t             DataOutEndpoint;
 } USB_Descriptor_Configuration_t;
 
 #endif // __DESCRIPTORS_H__

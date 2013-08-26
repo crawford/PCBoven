@@ -45,7 +45,7 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor = {
 		.Header           = {.Size = sizeof(USB_Descriptor_Interface_t), .Type = DTYPE_Interface},
 		.InterfaceNumber  = 0,
 		.AlternateSetting = 0,
-		.TotalEndpoints   = 2,
+		.TotalEndpoints   = 1,
 		.Class            = 0x00,
 		.SubClass         = 0x00,
 		.Protocol         = 0x00,
@@ -59,14 +59,6 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor = {
 		.EndpointSize      = IN_EPSIZE,
 		.PollingIntervalMS = 5
 	},
-
-	.DataOutEndpoint = {
-		.Header            = {.Size = sizeof(USB_Descriptor_Endpoint_t), .Type = DTYPE_Endpoint},
-		.EndpointAddress   = (ENDPOINT_DIR_OUT | OUT_EPNUM),
-		.Attributes        = (EP_TYPE_BULK | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
-		.EndpointSize      = OUT_EPSIZE,
-		.PollingIntervalMS = 5
-	}
 };
 
 /** Language descriptor structure. This descriptor, located in FLASH memory, is returned when the host requests
@@ -140,6 +132,5 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue, const uint8_t wIndex,
 /** Event handler for the library USB Configuration Changed event. */
 void EVENT_USB_Device_ConfigurationChanged() {
 	Endpoint_ConfigureEndpoint(IN_EPNUM, EP_TYPE_INTERRUPT, IN_EPSIZE, 1);
-	Endpoint_ConfigureEndpoint(OUT_EPNUM, EP_TYPE_BULK, OUT_EPSIZE, 1);
 }
 
