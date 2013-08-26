@@ -48,29 +48,44 @@ void OvenManager::stop()
 void OvenManager::setFilamentsEnabled(bool enabled)
 {
 	if (enabled != _filamentsEnabled) {
-		/*int code = enabled ? PCBOVEN_ENABLE_FILAMENTS :
-		                     PCBOVEN_DISABLE_FILAMENTS;
-		if (ioctl(_ioctlFd, code))*/
-			emit errorOccurred("TODO");
-		/*else
-			_filamentsEnabled = enabled;*/
+		int ret = libusb_control_transfer(
+				_handle,
+				LIBUSB_REQUEST_TYPE_VENDOR,
+				CONTROL_REQUEST_SET_FILAMENT,
+				enabled,
+				0,
+				NULL,
+				0,
+				REQUEST_TIMEOUT_MS);
+		if (ret)
+			emit errorOccurred(libusb_error_name(ret));
+		else
+			_filamentsEnabled = enabled;
 	}
 }
 
 void OvenManager::setTargetTemperature(int temperature)
 {
-	(void)temperature;
-	/*if (temperature != _targetTemperature) {
-		if (ioctl(_ioctlFd, PCBOVEN_SET_TEMPERATURE, temperature))*/
-			emit errorOccurred("TODO");
-		/*else
+	if (temperature != _targetTemperature) {
+		int ret = libusb_control_transfer(
+				_handle,
+				LIBUSB_REQUEST_TYPE_VENDOR,
+				CONTROL_REQUEST_SET_TEMPERATURE,
+				temperature,
+				0,
+				NULL,
+				0,
+				REQUEST_TIMEOUT_MS);
+		if (ret)
+			emit errorOccurred(libusb_error_name(ret));
+		else
 			_targetTemperature = temperature;
-	}*/
+	}
 }
 
 int OvenManager::connectToDevice(libusb_device_handle **handle)
 {
-	int ret = 0;
+	int ret;
 	libusb_device **devices;
 
 	*handle = NULL;

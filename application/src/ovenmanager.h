@@ -8,6 +8,13 @@
 #define PCBOVEN_ID_VENDOR      0x03EB
 #define PCBOVEN_ID_PRODUCT     0x3140
 
+#define REQUEST_TIMEOUT_MS     1000
+
+enum control_requests {
+	CONTROL_REQUEST_SET_TEMPERATURE = 0x00,
+	CONTROL_REQUEST_SET_FILAMENT    = 0x01,
+};
+
 struct oven_state {
 	int probe_temp;
 	int internal_temp;
