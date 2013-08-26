@@ -1,6 +1,7 @@
 #include <avr/io.h>
 #include <avr/power.h>
 #include <avr/wdt.h>
+#include <avr/sleep.h>
 #include <util/delay.h>
 #include <stdbool.h>
 #include <LUFA/Drivers/Board/LEDs.h>
@@ -14,15 +15,20 @@
 #define FILAMENT_BOTTOM_PORT PORTF
 #define FILAMENT_BOTTOM_PIN  1
 
+enum control_requests {
+	CONTROL_REQUEST_SET_TEMPERATURE = 0x00,
+	CONTROL_REQUEST_SET_FILAMENT    = 0x01,
+};
+
 void platform_init();
 int process_reading(struct max31855_result reading, int16_t target);
 
 volatile bool g_take_readings;
+volatile bool filaments_enabled;
+volatile int16_t target_probe_temp;
 
 int main()
 {
-	int16_t target_probe_temp = 0;
-	bool filaments_enabled = false;
 	struct max31855_result reading;
 	struct filament top_filament =
 	{
@@ -43,22 +49,17 @@ int main()
 	USB_Init();
 	LEDs_Init();
 
+	set_sleep_mode(SLEEP_MODE_IDLE);
+
 	g_take_readings = false;
 	sei();
 
 	while (true) {
-		Endpoint_SelectEndpoint(OUT_EPNUM);
-		if (Endpoint_IsOUTReceived()) {
-			target_probe_temp = Endpoint_Read_16_LE();
-			filaments_enabled = !!Endpoint_Read_8();
-
-			if (!filaments_enabled) {
-				filament_turn_off(&top_filament);
-				filament_turn_off(&bottom_filament);
-			}
-
-			Endpoint_ClearOUT();
+		if (!filaments_enabled) {
+			filament_turn_off(&top_filament);
+			filament_turn_off(&bottom_filament);
 		}
+
 		if (g_take_readings) {
 			g_take_readings = false;
 
@@ -94,9 +95,32 @@ int main()
 			Endpoint_ClearIN();
 		}
 		USB_USBTask();
+		//sleep_mode();
 	}
 
 	__builtin_unreachable();
+}
+
+void EVENT_USB_Device_ControlRequest()
+{
+	if (((USB_ControlRequest.bmRequestType & CONTROL_REQTYPE_TYPE) == REQTYPE_VENDOR) &&
+	    ((USB_ControlRequest.bmRequestType & CONTROL_REQTYPE_RECIPIENT) == REQREC_DEVICE))
+	{
+		Endpoint_ClearSETUP();
+		if ((USB_ControlRequest.bmRequestType & CONTROL_REQTYPE_DIRECTION) == REQDIR_HOSTTODEVICE)
+		{
+			switch(USB_ControlRequest.bRequest)
+			{
+				case CONTROL_REQUEST_SET_FILAMENT:
+					filaments_enabled = USB_ControlRequest.wValue;
+					break;
+				case CONTROL_REQUEST_SET_TEMPERATURE:
+					target_probe_temp = USB_ControlRequest.wValue;
+					break;
+			}
+		}
+		Endpoint_ClearStatusStage();
+	}
 }
 
 void platform_init()

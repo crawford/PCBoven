@@ -143,6 +143,3 @@ void EVENT_USB_Device_ConfigurationChanged() {
 	Endpoint_ConfigureEndpoint(OUT_EPNUM, EP_TYPE_BULK, OUT_EPSIZE, 1);
 }
 
-/** Event handler for the library USB Control Request reception event. */
-void EVENT_USB_Device_ControlRequest() {}
-
