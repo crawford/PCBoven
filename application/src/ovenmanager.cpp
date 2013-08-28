@@ -7,28 +7,18 @@
 
 #define REQUEST_TIMEOUT_MS     3000
 
-static void _register_sigio_receiver(OvenManager *receiver);
-
-static OvenManager *_sigio_receiver;
-
 enum control_requests {
 	CONTROL_REQUEST_SET_TEMPERATURE = 0x00,
 	CONTROL_REQUEST_SET_FILAMENT    = 0x01,
 };
 
-#if defined(_Windows)
-	typedef int16_t INT16;
-	typedef uint8_t UINT8;
-#define PACKED # pragma pack (1)
-#define UNPACKED # pragma pack ()
-#define __attribute__()
-#else
-#define PACKED
-#define UNPACKED
+#if defined Q_OS_WIN
+// uint8_t and int16_t are typedef'd by libusb.h
+#pragma pack (1)
+struct oven_state_frame {
+#elif defined Q_OS_LINUX
+struct __attribute((__packed__)) oven_state_frame {
 #endif
-
-PACKED
-struct __attribute__ ((__packed__)) oven_state_frame {
 	int16_t probe;
 	int16_t internal;
 	uint8_t short_vcc;
@@ -37,7 +27,9 @@ struct __attribute__ ((__packed__)) oven_state_frame {
 	uint8_t top_on;
 	uint8_t bottom_on;
 };
-UNPACKED
+#if defined Q_OS_WIN
+#pragma pack ()
+#endif
 
 OvenManager::OvenManager(QObject *parent) : QThread(parent)
 {
@@ -130,8 +122,6 @@ void OvenManager::run()
 		emit errorOccurred(libusb_error_name(ret));
 		return;
 	}
-
-	_register_sigio_receiver(this);
 
 	_shouldRun = true;
 	while (_shouldRun)
@@ -232,52 +222,3 @@ cleanup:
 
 	return ret;
 }
-
-void OvenManager::sigio_handler(int sig)
-{
-	QTime timestamp = QTime::currentTime();
-	struct oven_state state;
-	int ret;
-	(void)sig;
-
-	if (_connected) {
-		ret = -2;//ioctl(_ioctlFd, PCBOVEN_GET_STATE, &state);
-		if (ret == 0) {
-			emit readingsRead(state, timestamp);
-		} else if (ret == -1) {
-			if (errno == ENODEV) {
-				_connected = false;
-				emit disconnected();
-			} else {
-				emit errorOccurred("TODO");
-			}
-		} else {
-			emit errorOccurred("TODO");
-		}
-	} else {
-		ret = -1;//ioctl(_ioctlFd, PCBOVEN_IS_CONNECTED, &state);
-		if (ret < 0) {
-			emit errorOccurred("TODO");
-		} else if (ret) {
-			_connected = true;
-			emit connected();
-		}
-	}
-}
-
-void OvenManager::top_sigio_handler(int sig)
-{
-	if (_sigio_receiver)
-		_sigio_receiver->sigio_handler(sig);
-	signal(SIGIO, &OvenManager::top_sigio_handler);
-}
-
-static void _register_sigio_receiver(OvenManager *receiver)
-{
-	_sigio_receiver = receiver;
-	if (receiver)
-		signal(SIGIO, &OvenManager::top_sigio_handler);
-	else
-		signal(SIGIO, NULL);
-}
-

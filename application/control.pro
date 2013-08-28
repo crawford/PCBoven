@@ -18,9 +18,11 @@ HEADERS += src/controlpanel.h \
 
 FORMS   += ui/controlpanel.ui
 
-INCLUDEPATH = ../driver/src
+unix:INCLUDEPATH  += /usr/include/libusb-1.0
+INCLUDEPATH += $$PWD
 
-LIBS += -lusb-1.0
+win32:LIBS += -llibusb-1.0
+unix:LIBS  += -lusb-1.0
 
 DESTDIR     = build
 OBJECTS_DIR = build

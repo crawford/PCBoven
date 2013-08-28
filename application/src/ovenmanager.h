@@ -1,10 +1,9 @@
 #ifndef OVENMANAGER_H
 #define OVENMANAGER_H
 
-#include <libusb-1.0/libusb.h>
-#include <signal.h>
 #include <QThread>
 #include <QTime>
+#include <libusb.h>
 
 struct oven_state {
 	int probe_temp;
@@ -27,7 +26,6 @@ class OvenManager : public QThread
 		explicit OvenManager(QObject *parent = 0);
 		virtual ~OvenManager();
 		void stop();
-		static void top_sigio_handler(int signal);
 
 	signals:
 		void connected();
@@ -44,7 +42,6 @@ class OvenManager : public QThread
 
 	private:
 		int connectToDevice(libusb_device_handle **handle);
-		void sigio_handler(int sig);
 		static void LIBUSB_CALL irq_handler(struct libusb_transfer *transfer);
 
 		int _targetTemperature;
