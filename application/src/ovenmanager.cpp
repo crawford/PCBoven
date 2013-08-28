@@ -1,5 +1,4 @@
 #include <errno.h>
-#include <QDebug>
 #include "ovenmanager.h"
 
 #define PCBOVEN_ID_VENDOR      0x03EB
@@ -31,6 +30,11 @@ struct __attribute((__packed__)) oven_state_frame {
 #pragma pack ()
 #endif
 
+static inline int16_t _temperature12_to_data(int temperature);
+static inline int _data_to_temperature12(int16_t data);
+static inline int16_t _temperature14_to_data(int temperature);
+static inline int _data_to_temperature14(int16_t data);
+
 OvenManager::OvenManager(QObject *parent) : QThread(parent)
 {
 	_filamentsEnabled = false;
@@ -38,6 +42,7 @@ OvenManager::OvenManager(QObject *parent) : QThread(parent)
 	_connected = false;
 
 	qRegisterMetaType<struct oven_state>("oven_state");
+	_irqBuffer = new unsigned char[sizeof(struct oven_state_frame)]();
 
 	libusb_init(NULL);
 	libusb_set_debug(NULL, 100);
@@ -47,17 +52,15 @@ OvenManager::~OvenManager()
 {
 	stop();
 	libusb_exit(NULL);
+	delete _irqBuffer;
 }
 
-static unsigned char irqbuf[sizeof(struct oven_state_frame)];
 void LIBUSB_CALL OvenManager::irq_handler(struct libusb_transfer *transfer)
 {
 	OvenManager *manager = (OvenManager *)transfer->user_data;
 	struct oven_state_frame *frame = (struct oven_state_frame *)(transfer->buffer);
 	struct oven_state state;
 	int ret;
-
-	qDebug() << "irq transfer status " << transfer->status;
 
 	if (transfer->status == LIBUSB_TRANSFER_CANCELLED)
 		return;
@@ -68,8 +71,8 @@ void LIBUSB_CALL OvenManager::irq_handler(struct libusb_transfer *transfer)
 		return;
 	}
 
-	state.probe_temp         = (libusb_le16_to_cpu(frame->probe) << 2) >> 4;
-	state.internal_temp      = (libusb_le16_to_cpu(frame->internal) << 4) >> 8;
+	state.probe_temp         = _data_to_temperature14(frame->probe);
+	state.internal_temp      = _data_to_temperature12(frame->internal);
 	state.fault_short_vcc    = frame->short_vcc;
 	state.fault_short_gnd    = frame->short_gnd;
 	state.fault_open_circuit = frame->open_circuit;
@@ -77,9 +80,6 @@ void LIBUSB_CALL OvenManager::irq_handler(struct libusb_transfer *transfer)
 	state.filament_bottom_on = frame->bottom_on;
 
 	emit manager->readingsRead(state, QTime::currentTime());
-
-	for (unsigned int i = 0; i < sizeof(irqbuf); i++)
-		qDebug() << "IRQ callback " << transfer->buffer[i];
 
 	ret = libusb_submit_transfer(transfer);
 	if (ret)
@@ -111,8 +111,8 @@ void OvenManager::run()
 			_irqTransfer,
 			_handle,
 			LIBUSB_ENDPOINT_IN | 1,
-			irqbuf,
-			sizeof(irqbuf),
+			_irqBuffer,
+			sizeof(_irqBuffer),
 			&irq_handler,
 			this,
 			REQUEST_TIMEOUT_MS);
@@ -128,7 +128,6 @@ void OvenManager::run()
 	{
 		struct timeval timeout = { 1, 0 };
 		libusb_handle_events_timeout_completed(NULL, &timeout, NULL);
-		qDebug() << "Looping";
 	}
 }
 
@@ -172,7 +171,7 @@ void OvenManager::setTargetTemperature(int temperature)
 				_handle,
 				LIBUSB_REQUEST_TYPE_VENDOR,
 				CONTROL_REQUEST_SET_TEMPERATURE,
-				temperature,
+				_temperature14_to_data(temperature),
 				0,
 				NULL,
 				0,
@@ -222,3 +221,28 @@ cleanup:
 
 	return ret;
 }
+
+static inline int16_t _temperature12_to_data(int temperature)
+{
+	// Temperature12 is a 12-bit value with where the LSB is 2^-4
+	return (temperature << 4);
+}
+
+static inline int _data_to_temperature12(int16_t data)
+{
+	// Temperature12 is a 12-bit value with where the LSB is 2^-4
+	return libusb_le16_to_cpu(data << 4) >> 8;
+}
+
+static inline int16_t _temperature14_to_data(int temperature)
+{
+	// Temperature14 is a 14-bit value with where the LSB is 2^-2
+	return (temperature << 2);
+}
+
+static inline int _data_to_temperature14(int16_t data)
+{
+	// Temperature14 is a 14-bit value with where the LSB is 2^-2
+	return libusb_le16_to_cpu(data << 2) >> 4;
+}
+

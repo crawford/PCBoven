@@ -50,6 +50,7 @@ class OvenManager : public QThread
 		volatile bool _shouldRun;
 		libusb_device_handle *_handle;
 		struct libusb_transfer *_irqTransfer;
+		unsigned char *_irqBuffer;
 };
 
 #endif // OVENMANAGER_H
