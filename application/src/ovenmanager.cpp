@@ -1,19 +1,55 @@
 #include <errno.h>
-#include <QThread>
+#include <arpa/inet.h>
+#include <QDebug>
 #include "ovenmanager.h"
+
+#define PCBOVEN_ID_VENDOR      0x03EB
+#define PCBOVEN_ID_PRODUCT     0x3140
+
+#define REQUEST_TIMEOUT_MS     3000
 
 static void _register_sigio_receiver(OvenManager *receiver);
 
 static OvenManager *_sigio_receiver;
 
-OvenManager::OvenManager(QObject *parent) : QObject(parent)
+enum control_requests {
+	CONTROL_REQUEST_SET_TEMPERATURE = 0x00,
+	CONTROL_REQUEST_SET_FILAMENT    = 0x01,
+};
+
+#if defined(_Windows)
+	typedef int16_t INT16;
+	typedef uint8_t UINT8;
+#define PACKED # pragma pack (1)
+#define UNPACKED # pragma pack ()
+#define __attribute__()
+#else
+#define PACKED
+#define UNPACKED
+#endif
+
+PACKED
+struct __attribute__ ((__packed__)) oven_state_frame {
+	int16_t probe;
+	int16_t internal;
+	uint8_t short_vcc;
+	uint8_t short_gnd;
+	uint8_t open_circuit;
+	uint8_t top_on;
+	uint8_t bottom_on;
+};
+UNPACKED
+
+OvenManager::OvenManager(QObject *parent) : QThread(parent)
 {
 	_filamentsEnabled = false;
 	_targetTemperature = 0;
 	_connected = false;
 
+	qRegisterMetaType<struct oven_state>("oven_state");
+
 	libusb_init(NULL);
-	libusb_set_debug(NULL, 3);
+	libusb_set_debug(NULL, 100);
 }
 
 OvenManager::~OvenManager()
@@ -22,25 +58,101 @@ OvenManager::~OvenManager()
 	libusb_exit(NULL);
 }
 
-void OvenManager::start()
+static unsigned char irqbuf[sizeof(struct oven_state_frame)];
+void LIBUSB_CALL OvenManager::irq_handler(struct libusb_transfer *transfer)
+{
+	OvenManager *manager = (OvenManager *)transfer->user_data;
+	struct oven_state_frame *frame = (struct oven_state_frame *)(transfer->buffer);
+	struct oven_state state;
+	int ret;
+
+	qDebug() << "irq transfer status " << transfer->status;
+
+	if (transfer->status == LIBUSB_TRANSFER_CANCELLED)
+		return;
+
+	if (transfer->status != LIBUSB_TRANSFER_COMPLETED) {
+		manager->_shouldRun = false;
+		emit manager->errorOccurred("communication with oven lost");
+		return;
+	}
+
+	state.probe_temp         = (ntohs(frame->probe) << 2) >> 4;
+	state.internal_temp      = (ntohs(frame->internal) << 4) >> 8;
+	state.fault_short_vcc    = frame->short_vcc;
+	state.fault_short_gnd    = frame->short_gnd;
+	state.fault_open_circuit = frame->open_circuit;
+	state.filament_top_on    = frame->top_on;
+	state.filament_bottom_on = frame->bottom_on;
+
+	emit manager->readingsRead(state, QTime::currentTime());
+
+	for (unsigned int i = 0; i < sizeof(irqbuf); i++)
+		qDebug() << "IRQ callback " << transfer->buffer[i];
+
+	ret = libusb_submit_transfer(transfer);
+	if (ret)
+	{
+		manager->_shouldRun = false;
+		emit manager->errorOccurred(libusb_error_name(ret));
+	}
+}
+
+void OvenManager::run()
 {
 	int ret = connectToDevice(&_handle);
 	_connected = false;
 	if (ret)
+		emit errorOccurred(libusb_error_name(ret));
+	else if (!_handle)
+		return;
+
+	_connected = true;
+	emit connected();
+
+	_irqTransfer = libusb_alloc_transfer(0);
+	if (!_irqTransfer)
+	{
+		emit errorOccurred("libusb_alloc_transfer()");
+		return;
+	}
+	libusb_fill_interrupt_transfer(
+			_irqTransfer,
+			_handle,
+			LIBUSB_ENDPOINT_IN | 1,
+			irqbuf,
+			sizeof(irqbuf),
+			&irq_handler,
+			this,
+			REQUEST_TIMEOUT_MS);
+	ret = libusb_submit_transfer(_irqTransfer);
+	if (ret)
 	{
 		emit errorOccurred(libusb_error_name(ret));
-	}
-	else if (_handle)
-	{
-		_connected = true;
-		emit connected();
+		return;
 	}
 
 	_register_sigio_receiver(this);
+
+	_shouldRun = true;
+	while (_shouldRun)
+	{
+		struct timeval timeout = { 1, 0 };
+		libusb_handle_events_timeout_completed(NULL, &timeout, NULL);
+		qDebug() << "Looping";
+	}
 }
 
 void OvenManager::stop()
 {
+	if (isRunning())
+	{
+		libusb_cancel_transfer(_irqTransfer);
+		_shouldRun = false;
+		wait();
+	}
+	libusb_free_transfer(_irqTransfer);
+
 	if (_handle)
 		libusb_close(_handle);
 }

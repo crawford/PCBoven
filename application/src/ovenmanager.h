@@ -3,17 +3,8 @@
 
 #include <libusb-1.0/libusb.h>
 #include <signal.h>
+#include <QThread>
 #include <QTime>
-
-#define PCBOVEN_ID_VENDOR      0x03EB
-#define PCBOVEN_ID_PRODUCT     0x3140
-
-#define REQUEST_TIMEOUT_MS     1000
-
-enum control_requests {
-	CONTROL_REQUEST_SET_TEMPERATURE = 0x00,
-	CONTROL_REQUEST_SET_FILAMENT    = 0x01,
-};
 
 struct oven_state {
 	int probe_temp;
@@ -26,15 +17,15 @@ struct oven_state {
 	bool filament_top_on;
 	bool filament_bottom_on;
 };
+Q_DECLARE_METATYPE(struct oven_state)
 
-class OvenManager : public QObject
+class OvenManager : public QThread
 {
 	Q_OBJECT
 
 	public:
 		explicit OvenManager(QObject *parent = 0);
 		virtual ~OvenManager();
-		void start();
 		void stop();
 		static void top_sigio_handler(int signal);
 
@@ -48,14 +39,20 @@ class OvenManager : public QObject
 		void setFilamentsEnabled(bool enabled);
 		void setTargetTemperature(int temperature);
 
+	protected:
+		void run();
+
 	private:
 		int connectToDevice(libusb_device_handle **handle);
 		void sigio_handler(int sig);
+		static void LIBUSB_CALL irq_handler(struct libusb_transfer *transfer);
 
 		int _targetTemperature;
 		bool _filamentsEnabled;
 		bool _connected;
+		volatile bool _shouldRun;
 		libusb_device_handle *_handle;
+		struct libusb_transfer *_irqTransfer;
 };
 
 #endif // OVENMANAGER_H
