@@ -1,5 +1,4 @@
 #include <errno.h>
-#include <arpa/inet.h>
 #include <QDebug>
 #include "ovenmanager.h"
 
@@ -77,8 +76,8 @@ void LIBUSB_CALL OvenManager::irq_handler(struct libusb_transfer *transfer)
 		return;
 	}
 
-	state.probe_temp         = (ntohs(frame->probe) << 2) >> 4;
-	state.internal_temp      = (ntohs(frame->internal) << 4) >> 8;
+	state.probe_temp         = (libusb_le16_to_cpu(frame->probe) << 2) >> 4;
+	state.internal_temp      = (libusb_le16_to_cpu(frame->internal) << 4) >> 8;
 	state.fault_short_vcc    = frame->short_vcc;
 	state.fault_short_gnd    = frame->short_gnd;
 	state.fault_open_circuit = frame->open_circuit;
