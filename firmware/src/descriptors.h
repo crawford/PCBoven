@@ -5,7 +5,7 @@
 #include <LUFA/Drivers/USB/USB.h>
 
 
-#define IN_EPNUM     (ENDPOINT_DIR_IN | 1)
+#define IN_EPADDR    (ENDPOINT_DIR_IN | 1)
 #define IN_EPSIZE    16
 
 /** Type define for the device configuration descriptor structure. This must be defined in the

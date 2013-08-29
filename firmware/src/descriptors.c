@@ -54,7 +54,7 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor = {
 
 	.DataInEndpoint = {
 		.Header            = {.Size = sizeof(USB_Descriptor_Endpoint_t), .Type = DTYPE_Endpoint},
-		.EndpointAddress   = IN_EPNUM,
+		.EndpointAddress   = IN_EPADDR,
 		.Attributes        = (EP_TYPE_INTERRUPT | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
 		.EndpointSize      = IN_EPSIZE,
 		.PollingIntervalMS = 5
@@ -131,6 +131,6 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue, const uint8_t wIndex,
 
 /** Event handler for the library USB Configuration Changed event. */
 void EVENT_USB_Device_ConfigurationChanged() {
-	Endpoint_ConfigureEndpoint(IN_EPNUM, EP_TYPE_INTERRUPT, IN_EPSIZE, 1);
+	Endpoint_ConfigureEndpoint(IN_EPADDR, EP_TYPE_INTERRUPT, IN_EPSIZE, 1);
 }
 

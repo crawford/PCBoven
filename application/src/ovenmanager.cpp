@@ -112,7 +112,7 @@ void OvenManager::run()
 			_handle,
 			LIBUSB_ENDPOINT_IN | 1,
 			_irqBuffer,
-			sizeof(_irqBuffer),
+			sizeof(oven_state_frame),
 			&irq_handler,
 			this,
 			REQUEST_TIMEOUT_MS);

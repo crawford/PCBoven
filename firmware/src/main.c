@@ -63,8 +63,6 @@ int main()
 		if (g_take_readings) {
 			g_take_readings = false;
 
-			Endpoint_SelectEndpoint(IN_EPNUM);
-
 			if (max31855_read(&reading)) {
 				LEDs_ToggleLEDs(LEDS_ALL_LEDS);
 				filament_turn_off(&top_filament);
@@ -83,6 +81,8 @@ int main()
 						filament_turn_off(&bottom_filament);
 				}
 			}
+
+			Endpoint_SelectEndpoint(IN_EPADDR);
 
 			Endpoint_Write_16_LE(reading.probe_temp);
 			Endpoint_Write_16_LE(reading.internal_temp);
