@@ -9,9 +9,9 @@ const USB_Descriptor_Device_t PROGMEM DeviceDescriptor = {
 	.Header                 = { .Size = sizeof(USB_Descriptor_Device_t), .Type = DTYPE_Device },
 	.USBSpecification       = VERSION_BCD(02.00),
 
-	.Class    = 0x00,
-	.SubClass = 0x00,
-	.Protocol = 0x00,
+	.Class                  = 0x00,
+	.SubClass               = 0x00,
+	.Protocol               = 0x00,
 
 	.Endpoint0Size          = FIXED_CONTROL_ENDPOINT_SIZE,
 
@@ -54,7 +54,7 @@ const USB_Descriptor_Configuration_t PROGMEM ConfigurationDescriptor = {
 
 	.DataInEndpoint = {
 		.Header            = {.Size = sizeof(USB_Descriptor_Endpoint_t), .Type = DTYPE_Endpoint},
-		.EndpointAddress   = (ENDPOINT_DIR_IN | IN_EPNUM),
+		.EndpointAddress   = IN_EPNUM,
 		.Attributes        = (EP_TYPE_INTERRUPT | ENDPOINT_ATTR_NO_SYNC | ENDPOINT_USAGE_DATA),
 		.EndpointSize      = IN_EPSIZE,
 		.PollingIntervalMS = 5
@@ -84,7 +84,7 @@ const USB_Descriptor_String_t PROGMEM ManufacturerString = {
  *  Descriptor.
  */
 const USB_Descriptor_String_t PROGMEM ProductString = {
-	.Header                 = { .Size = USB_STRING_LEN(16), .Type = DTYPE_String },
+	.Header                 = { .Size = USB_STRING_LEN(8), .Type = DTYPE_String },
 	.UnicodeString          = L"PCBoven™"
 };
 
