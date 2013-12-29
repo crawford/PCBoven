@@ -73,7 +73,7 @@ $(ELF): $(OBJS)
 	$(CC) $(CFLAGS) $^ --output $@ $(LDFLAGS)
 
 $(BUILD_DIR)/%.o: %.c
-	@mkdir -p "`echo $@ | sed 's|[^/]*\.o||')`"
+	@mkdir -p "`echo $@ | sed 's|[^/]*\.o||'`"
 	$(CC) -c $(CFLAGS) $< -o $@
 
 clean:
