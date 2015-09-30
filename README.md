@@ -4,7 +4,7 @@ PCBoven
 Reflow your toast.
 
 '''Note''': Use this design at your own risk. I am not responsible for damaged
-hardware or scorched appartments.
+hardware or scorched apartments.
 
 This is a USB host controlled DIY reflow oven. The aim of the project is to take
 a cheap toaster oven and turn it into a temperature controlled reflow oven. The
